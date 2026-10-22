@@ -332,10 +332,11 @@ const store = {
   async replaceAll(profile,workouts){
     if(this.mode==="db"){
       try{
-        await this.profRef().set({profile});
+        /* new data first, old removed last: a dropped connection leaves extra workouts, never missing ones */
+        for(const w of workouts) await this.wCol().doc(w.id).set(w);
         const keep=new Set(workouts.map(w=>w.id)), old=await this.wCol().get();
         for(const d of old.docs){const id=d.data().id; if(!keep.has(id)) await this.wCol().doc(id).delete()}
-        for(const w of workouts) await this.wCol().doc(w.id).set(w);
+        await this.profRef().set({profile});
         return true;
       }catch(e){toast("Не получилось загрузить в хранилище. Проверь сеть");return false}
     }
@@ -363,16 +364,24 @@ function parseBackup(text){
   const p=o.profile;
   if(!isObj(p)||!str(p.name)||!p.name.trim()||typeof p.bw!=="number"||!(p.bw>25&&p.bw<300)) return fail("В файле нет профиля персонажа");
   if(!Array.isArray(o.workouts)) return fail("В файле нет журнала тренировок");
-  const profile=Object.assign({},p,{
-    sex:p.sex==="f"?"f":"m",
-    hidden:Array.isArray(p.hidden)?p.hidden.filter(str):[],
-    custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&str(c.id)&&str(c.n)&&str(c.g)):[]
-  });
+  /* ids end up in HTML attributes and db paths, so only plain ones are accepted */
+  const safeId=v=>str(v)&&/^[\w-]{1,64}$/.test(v);
+  const isDate=v=>str(v)&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&dkey(parseD(v))===v;
+  const toInt=v=>parseInt(v)||null;
+  const builtin=new Set(EX.map(e=>e.id));
+  const profile={
+    name:p.name.trim().slice(0,24), sex:p.sex==="f"?"f":"m", bw:p.bw,
+    height:toInt(p.height), age:toInt(p.age),
+    gym:str(p.gym)&&p.gym.trim()?p.gym.trim().slice(0,40):"Crunch Fit Lichtenberg",
+    hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
+    custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&c.g in GROUPS).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
+    createdAt:isDate(p.createdAt)?p.createdAt:today()
+  };
   const seen=new Set(), workouts=[]; let skipped=0;
   for(const w of o.workouts){
-    if(!isObj(w)||!str(w.id)||seen.has(w.id)||!str(w.date)||!/^\d{4}-\d{2}-\d{2}$/.test(w.date)||!Array.isArray(w.exercises)){skipped++;continue}
+    if(!isObj(w)||!safeId(w.id)||seen.has(w.id)||!isDate(w.date)||!Array.isArray(w.exercises)){skipped++;continue}
     seen.add(w.id);
-    const exercises=w.exercises.filter(e=>isObj(e)&&str(e.ex)&&Array.isArray(e.sets))
+    const exercises=w.exercises.filter(e=>isObj(e)&&safeId(e.ex)&&Array.isArray(e.sets))
       .map(e=>({ex:e.ex,sets:e.sets.filter(isObj).map(s=>({w:String(s.w??"0"),r:String(s.r??"0")}))}));
     const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t; out.exercises=exercises;
     workouts.push(out);
@@ -393,7 +402,8 @@ async function downloadBackup(){
   setTimeout(()=>URL.revokeObjectURL(url),0);
   toast("Файл сохранён: "+name);
 }
-const IMP_INPUT=`<input type="file" id="imp-file" accept=".json,application/json" hidden>`;
+/* visually hidden rather than display:none, so every Safari opens the picker on .click() */
+const IMP_INPUT=`<input type="file" id="imp-file" accept=".json,application/json" tabindex="-1" aria-hidden="true" style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0">`;
 const nWorkouts=n=>n+" "+plural(n,"тренировка","тренировки","тренировок");
 async function readImportFile(el){
   const f=el.files&&el.files[0]; if(!f) return;
@@ -403,11 +413,15 @@ async function readImportFile(el){
   if(!S.profile){await applyImport(r);return}
   S.pendingImport=r; S.confirm="import"; render();
 }
+/* the screen only switches to the imported data once it is stored; on failure it shows what the store really holds */
 async function applyImport(data){
-  S.profile=data.profile; S.workouts=data.workouts;
-  S.demo=false; S.coach=null; S.summary=null; S.confirm=null; S.pendingImport=null;
-  const ok=await store.replaceAll(S.profile,S.workouts);
-  S.tab="home"; render(); window.scrollTo(0,0);
+  S.confirm=null; S.pendingImport=null;
+  const ok=await store.replaceAll(data.profile,data.workouts);
+  const now=ok?data:await store.load();
+  S.profile=now.profile; S.workouts=now.workouts||[];
+  S.demo=false; S.coach=null; S.summary=null;
+  if(ok) S.tab="home";
+  render(); window.scrollTo(0,0);
   if(ok) toast("Загружено: "+nWorkouts(S.workouts.length));
 }
 
@@ -730,7 +744,7 @@ function viewSheet(){
     <div class="chips" role="group" aria-label="Группа мышц">${[["all","Все"],...Object.entries(GROUPS)].map(([k,n])=>`<button data-libg="${k}" aria-pressed="${gsel===k}">${n}${k===D.lag?" · отстаёт":""}</button>`).join("")}</div>
     ${zones.map(z=>`<section class="zone" data-zone><h3 class="meta" style="font-weight:500;padding-top:6px">${ZONES[z]}</h3><div class="list">${items.filter(e=>e.z===z).map(e=>{const l=lastSetsFor(e.id);const top=l?topSet(l.sets):null;
       const hay=(e.n+" "+(e.ru||"")).toLowerCase();
-      return `<button class="li" data-add-ex="${e.id}" data-name="${esc(hay)}" ${q&&!hay.includes(q)?"hidden":""}>
+      return `<button class="li" data-add-ex="${esc(e.id)}" data-name="${esc(hay)}" ${q&&!hay.includes(q)?"hidden":""}>
       <span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span>
       <span class="fig sub" aria-hidden="true">Добавить</span></button>`}).join("")}</div></section>`).join("")}
     <button class="link" data-act="open-gym" style="align-self:flex-start">Нет нужного тренажёра? Настроить мой зал</button>
@@ -750,9 +764,9 @@ function viewGymSheet(){
       <button class="btn small primary" data-act="add-custom" style="align-self:flex-start">Добавить</button>
     </div>
     ${ZONE_ORDER.filter(z=>ALL.some(e=>e.z===z)).map(z=>`<section><h3 class="meta" style="font-weight:500;padding-top:6px">${ZONES[z]}</h3><div class="list">${ALL.filter(e=>e.z===z).map(e=>`<label class="li" style="cursor:pointer">
-      <input type="checkbox" data-toggle-ex="${e.id}" ${isHidden(e.id)?"":"checked"} style="width:22px;height:22px;accent-color:var(--text);flex:none">
+      <input type="checkbox" data-toggle-ex="${esc(e.id)}" ${isHidden(e.id)?"":"checked"} style="width:22px;height:22px;accent-color:var(--text);flex:none">
       <span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}</span></span>
-      ${e.z==="custom"?`<button class="btn small ghost" data-act="rm-custom" data-id="${e.id}" aria-label="Удалить ${esc(e.n)}">Удалить</button>`:""}</label>`).join("")}</div></section>`).join("")}
+      ${e.z==="custom"?`<button class="btn small ghost" data-act="rm-custom" data-id="${esc(e.id)}" aria-label="Удалить ${esc(e.n)}">Удалить</button>`:""}</label>`).join("")}</div></section>`).join("")}
   </div></div>`;
 }
 function viewSummary(){
@@ -802,7 +816,7 @@ function histRow(w,canDelete=true){
   return `<div class="li">
     <span class="grow"><span class="t">${gs.join(", ")||"Тренировка"}</span><span class="s num">${relDate(w.date)} · ${fmt(r.vol/1000,2)} т${r.prSets?` · <span style="color:var(--accent)">${r.prSets} PR</span>`:""}</span></span>
     <span class="fig num">+${fmt(r.xp)} XP</span>
-    ${S.demo||!canDelete?"":`<button class="btn small ${confirm?"danger":"ghost"}" data-act="${confirm?"del-yes":"del"}" data-id="${w.id}" aria-label="${confirm?"Подтвердить удаление":"Удалить тренировку"} ${niceDate(w.date)}">${confirm?"Удалить":"×"}</button>`}
+    ${S.demo||!canDelete?"":`<button class="btn small ${confirm?"danger":"ghost"}" data-act="${confirm?"del-yes":"del"}" data-id="${esc(w.id)}" aria-label="${confirm?"Подтвердить удаление":"Удалить тренировку"} ${niceDate(w.date)}">${confirm?"Удалить":"×"}</button>`}
   </div>`;
 }
 
@@ -887,7 +901,7 @@ function viewProfile(){
     <div class="card"><h2>Данные</h2>
       <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут. Сохраняй копию в файл время от времени."}</p>
       <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button><button class="btn" data-act="imp-open">Загрузить из файла</button></div>
-      ${S.confirm==="import"&&S.pendingImport?(()=>{const pi=S.pendingImport;return `<p class="meta">В файле ${nWorkouts(pi.workouts.length)}${pi.skipped?`, ${pi.skipped} пропущено`:""}. Сейчас записано ${S.demo?0:S.workouts.length}: они будут заменены.</p>
+      ${S.confirm==="import"&&S.pendingImport?(()=>{const pi=S.pendingImport;return `<p class="meta">В файле ${nWorkouts(pi.workouts.length)}${pi.skipped?`, ${pi.skipped} пропущено`:""}. Профиль и ${nWorkouts(S.demo?0:S.workouts.length)}, которые записаны сейчас, будут заменены данными из файла.</p>
       <div class="row"><button class="btn danger" data-act="imp-yes">Заменить</button><button class="btn ghost" data-act="imp-no">Отмена</button></div>`})():""}
       ${S.workouts.length||S.demo?"":`<button class="btn" data-act="demo" style="align-self:flex-start">Показать пример за 8 недель</button>`}
       ${S.demo?`<button class="btn" data-act="demo-clear" style="align-self:flex-start">Убрать пример</button>`:""}
@@ -995,8 +1009,8 @@ document.addEventListener("click",async ev=>{
       Object.assign(S.profile,v); await store.saveProfile(S.profile); render(); toast("Профиль сохранён"); break}
     case "demo": S.demo=true; S.workouts=makeDemo(); S.tab="home"; render(); window.scrollTo(0,0); break;
     case "demo-clear": S.demo=false; S.workouts=[]; S.coach=null; render(); break;
-    case "exp": downloadBackup(); break;
-    case "imp-open": $("#imp-file").click(); break;
+    case "exp": downloadBackup(); render(); break;
+    case "imp-open": S.pendingImport=null; render(); $("#imp-file").click(); break;
     case "imp-yes": if(S.pendingImport) await applyImport(S.pendingImport); break;
     case "imp-no": S.pendingImport=null; render(); break;
     case "coach": askCoach(); break;

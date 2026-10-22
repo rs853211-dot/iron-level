@@ -26,6 +26,12 @@ const cases = {
   "sets-as-strings": () => { const r = pb(S({profile:P,workouts:[{id:"c",date:"2026-10-02",exercises:[{ex:"squat",sets:[{w:100,r:5}]}]}]})); return eq(r.workouts[0].exercises[0].sets[0], {w:"100",r:"5"}) || r; },
   "unknown-ex-kept": () => { const r = pb(S({profile:P,workouts:[{id:"d",date:"2026-10-03",exercises:[{ex:"gone",sets:[{w:"1",r:"1"}]}]}]})); return r.workouts.length === 1 || r; },
   "profile-defaults": () => { const p = pb(S({profile:{name:"A",bw:70},workouts:[]})).profile; return p.sex === "m" && eq(p.hidden, []) && eq(p.custom, []) || p; },
+  // review findings
+  "unsafe-workout-id-skipped": () => { const r = pb(S({profile:P,workouts:[...W,{...W[0],id:'x"><img src=x onerror=alert(1)>'}]})); return r.workouts.length === 1 && r.skipped === 1 || r; },
+  "unsafe-ex-dropped": () => { const r = pb(S({profile:P,workouts:[{id:"e",date:"2026-10-04",exercises:[{ex:'a"b',sets:[]},{ex:"squat",sets:[]}]}]})); return eq(r.workouts[0].exercises.map(e => e.ex), ["squat"]) || r; },
+  "custom-sanitized": () => { const p = pb(S({profile:{...P,custom:[{id:"c-2",n:"Ok",g:"legs",t:0,z:"hs",bw:true},{id:"c-3",n:"BadGroup",g:"nope"},{id:"hs-bench",n:"Clash",g:"chest"},{id:'c"4',n:"Bad",g:"arms"}]},workouts:[]})).profile; return eq(p.custom, [{id:"c-2",n:"Ok",g:"legs"}]) || p.custom; },
+  "profile-whitelist": () => { const p = pb(S({profile:{name:"x".repeat(40),bw:80,height:"abc",age:"31",gym:{a:1},evil:1,createdAt:5},workouts:[]})).profile; return p.name.length === 24 && p.height === null && p.age === 31 && p.gym === "Crunch Fit Lichtenberg" && !("evil" in p) && /^\d{4}-\d{2}-\d{2}$/.test(p.createdAt) || p; },
+  "impossible-date-skipped": () => { const r = pb(S({profile:P,workouts:[...W,{id:"f",date:"2026-02-31",exercises:[]}]})); return r.workouts.length === 1 && r.skipped === 1 || r; },
 };
 
 export async function run() {
