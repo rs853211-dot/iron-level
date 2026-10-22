@@ -472,7 +472,7 @@ async function applyImport(data){
 }
 
 /* ---------- state ---------- */
-const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null};
+const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null, pday:null};
 rebuildEx();
 
 /* ---------- derived numbers: all XP is recomputed from the log, so it never drifts ---------- */
@@ -769,10 +769,25 @@ function suggestion(exId){
   if(allHit) return `${when}: ${fmtW(+top.w)} кг × ${top.r}. Все подходы на 8+ повторов, попробуй ${fmtW(+top.w+step)} кг × 6–8.`;
   return `${when}: ${fmtW(+top.w)} кг × ${top.r}. Останься на ${fmtW(+top.w)} кг и добери до 8 повторов в каждом подходе.`;
 }
+/* today's program day: the one picked on screen, else the next one after the log */
+function planToday(){
+  const pid=S.profile&&S.profile.program; if(!PRM[pid]) return null;
+  const day=progDay(pid,S.pday)?S.pday:nextDay(pid,S.demo?[]:S.workouts);
+  return {pid,day,list:buildDay(pid,day,new Set(S.profile.hidden||[]),ALL)};
+}
+function progCard(pl){
+  const p=PRM[pl.pid], d=progDay(pl.pid,pl.day);
+  return `<div class="card"><div class="row between"><h2>${p.n}</h2><button class="link" data-tab="profile">Сменить</button></div>
+    <div class="seg" role="group" aria-label="День программы">${p.days.map(x=>`<button data-pday="${x.id}" aria-pressed="${x.id===pl.day}">${x.n}</button>`).join("")}</div>
+    <div class="list">${pl.list.map(x=>`<div class="li" style="min-height:40px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig">${x.s} × ${x.r}</span></div>`).join("")||'<p class="sub">В твоём зале нет тренажёров для этого дня. Включи их в «Мой зал».</p>'}</div>
+    <button class="btn primary block" data-act="start-prog" ${pl.list.length?"":"disabled"}>Начать: ${d.n}</button></div>`;
+}
 function viewWorkout(){
   const a=S.active;
+  const pl=a?null:planToday();
   if(!a) return `<div class="stack">
       <div class="titlerow"><div class="grow"><h1>Тренировка</h1><p class="sub" style="font-size:13px">На этой неделе ${D.thisWeek} из 3. Третья даёт +10% опыта.</p></div></div>
+      ${pl?progCard(pl):""}
       <div class="card">
         <h2>Как начисляется опыт</h2>
         <div class="list">
@@ -782,7 +797,7 @@ function viewWorkout(){
           <div class="li" style="min-height:40px"><span class="grow">Тренировка завершена</span><span class="fig">+${XP.done} XP</span></div>
         </div>
       </div>
-      <button class="btn primary block" data-act="start">Начать тренировку</button>
+      ${pl?'<button class="btn block" data-act="start">Пустая тренировка</button>':'<button class="btn primary block" data-act="start">Начать тренировку</button><button class="link" data-tab="profile" style="align-self:center">Выбрать программу</button>'}
       ${D.ws.length?`<div class="card"><div class="row between"><h2>Последние</h2><button class="link" data-tab="progress">Вся история</button></div><div class="list">${D.ws.slice(-4).reverse().map(w=>histRow(w,false)).join("")}</div></div>`:""}
     </div>`;
   const nSets=a.exercises.reduce((s,e)=>s+e.sets.filter(x=>+x.r>0).length,0);
@@ -801,7 +816,7 @@ function viewWorkout(){
 function exCard(ex,i){
   const e=EXM[ex.ex]; const sug=suggestion(ex.ex); const prev=D.best[ex.ex];
   return `<div class="card">
-    <div class="row between" style="align-items:flex-start"><div class="grow"><h2>${esc(e.n)}</h2><p class="meta">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}${exHint(e)?" · "+exHint(e):""}</p></div>
+    <div class="row between" style="align-items:flex-start"><div class="grow"><h2>${esc(e.n)}</h2><p class="meta">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}${exHint(e)?" · "+exHint(e):""}${ex.goal?" · цель "+esc(ex.goal):""}</p></div>
       <button class="link" data-act="rm-ex" data-i="${i}" style="color:var(--faint)">Убрать</button></div>
     ${sug?`<div class="well sub" style="font-size:13px">${esc(sug)}</div>`:""}
     <div class="sets">
@@ -1049,6 +1064,7 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.tab){S.tab=t.dataset.tab;S.summary=null;S.confirm=null;S.sheet=null;render();window.scrollTo(0,0);return}
   if(t.dataset.onbSex){S.onb=Object.assign(readOnb(),{sex:t.dataset.onbSex});render();return}
   if(t.dataset.prog!==undefined){const id=t.dataset.prog||null;S.profile.program=id;S.pday=null;store.saveProfile(S.profile);render();toast(id?"Программа: "+PRM[id].n:"Без программы");return}
+  if(t.dataset.pday){S.pday=t.dataset.pday;render();return}
   if(t.dataset.psex){Object.assign(S.profile,readProfileInputs(),{sex:t.dataset.psex});store.saveProfile(S.profile);render();return}
   if(t.dataset.period){S.period=t.dataset.period;render();return}
   if(t.dataset.libg){S.sheet.g=t.dataset.libg;render();return}
@@ -1070,6 +1086,13 @@ document.addEventListener("click",async ev=>{
       S.profile={name:p.name.trim(),sex:p.sex||"m",bw,height:parseInt(p.height)||null,age:parseInt(p.age)||null,gym:"Crunch Fit Lichtenberg",hidden:[],custom:[],createdAt:today()};
       await store.saveProfile(S.profile); S.tab="home"; render(); break}
     case "start": if(S.demo){S.demo=false;S.workouts=[]} S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; draft.set(S.active); S.tab="workout"; S.sheet={g:"all",q:""}; render(); break;
+    case "start-prog":{const pl=planToday(); if(!pl||!pl.list.length) break;
+      if(S.demo){S.demo=false;S.workouts=[]}
+      const exercises=pl.list.map(x=>{const last=lastSetsFor(x.ex), ls=last?last.sets:[];
+        const sets=Array.from({length:x.s},(_,j)=>({w:ls.length?ls[Math.min(j,ls.length-1)].w:"",r:""}));
+        return {ex:x.ex,goal:x.s+" × "+x.r,sets}});
+      S.active={id:uid(),date:today(),t:Date.now(),prog:pl.pid,day:pl.day,exercises}; S.pday=null; S.sheet=null;
+      draft.set(S.active); S.tab="workout"; render(); window.scrollTo(0,0); break}
     case "go-workout": S.tab="workout"; render(); break;
     case "open-lib": S.sheet={g:"all",q:""}; render(); break;
     case "close-sheet": S.sheet=null; render(); break;
