@@ -334,6 +334,38 @@ const draft = {
   set(v){try{v?localStorage.setItem(LS+".draft",JSON.stringify(v)):localStorage.removeItem(LS+".draft")}catch(e){}}
 };
 
+/* ---------- backup: profile + log as one JSON file; everything derived is recomputed on load ---------- */
+const BACKUP_V=1;
+function makeBackup(profile,workouts,demo){
+  return {app:"iron-level",version:BACKUP_V,exportedAt:new Date().toISOString(),profile,workouts:demo?[]:workouts};
+}
+function parseBackup(text){
+  const fail=error=>({ok:false,error});
+  const isObj=v=>!!v&&typeof v==="object"&&!Array.isArray(v);
+  const str=v=>typeof v==="string";
+  let o; try{o=JSON.parse(text)}catch(e){return fail("Не получилось прочитать файл. Это точно JSON из Iron Level?")}
+  if(!isObj(o)||("app" in o&&o.app!=="iron-level")) return fail("Это файл не из Iron Level");
+  if(+o.version>BACKUP_V) return fail("Файл из более новой версии Iron Level. Обнови страницу и попробуй снова");
+  const p=o.profile;
+  if(!isObj(p)||!str(p.name)||!p.name.trim()||typeof p.bw!=="number"||!(p.bw>25&&p.bw<300)) return fail("В файле нет профиля персонажа");
+  if(!Array.isArray(o.workouts)) return fail("В файле нет журнала тренировок");
+  const profile=Object.assign({},p,{
+    sex:p.sex==="f"?"f":"m",
+    hidden:Array.isArray(p.hidden)?p.hidden.filter(str):[],
+    custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&str(c.id)&&str(c.n)&&str(c.g)):[]
+  });
+  const seen=new Set(), workouts=[]; let skipped=0;
+  for(const w of o.workouts){
+    if(!isObj(w)||!str(w.id)||seen.has(w.id)||!str(w.date)||!/^\d{4}-\d{2}-\d{2}$/.test(w.date)||!Array.isArray(w.exercises)){skipped++;continue}
+    seen.add(w.id);
+    const exercises=w.exercises.filter(e=>isObj(e)&&str(e.ex)&&Array.isArray(e.sets))
+      .map(e=>({ex:e.ex,sets:e.sets.filter(isObj).map(s=>({w:String(s.w??"0"),r:String(s.r??"0")}))}));
+    const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t; out.exercises=exercises;
+    workouts.push(out);
+  }
+  return {ok:true,profile,workouts,skipped};
+}
+
 /* ---------- state ---------- */
 const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null};
 rebuildEx();
@@ -946,6 +978,8 @@ document.addEventListener("input",ev=>{
   }
   if(el.id==="lib-q"){S.sheet.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll("[data-add-ex]").forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll("[data-add-ex]")].some(b=>!b.hidden)})}
 });
+
+window.ironLevelBackup={makeBackup,parseBackup};
 
 /* ---------- boot ---------- */
 (async function boot(){
