@@ -327,6 +327,20 @@ const store = {
   async delWorkout(id){
     if(this.mode==="db"){try{await this.wCol().doc(id).delete();return}catch(e){toast("Не удалось удалить. Попробуй ещё раз")}}
     this.local();
+  },
+  /* import: unlike local(), a failed write is reported, so the user knows the backup did not land */
+  async replaceAll(profile,workouts){
+    if(this.mode==="db"){
+      try{
+        await this.profRef().set({profile});
+        const keep=new Set(workouts.map(w=>w.id)), old=await this.wCol().get();
+        for(const d of old.docs){const id=d.data().id; if(!keep.has(id)) await this.wCol().doc(id).delete()}
+        for(const w of workouts) await this.wCol().doc(w.id).set(w);
+        return true;
+      }catch(e){toast("Не получилось загрузить в хранилище. Проверь сеть");return false}
+    }
+    try{localStorage.setItem(LS,JSON.stringify({profile,workouts}));return true}
+    catch(e){toast("В браузере не хватило места для этих данных");return false}
   }
 };
 const draft = {
@@ -379,9 +393,26 @@ async function downloadBackup(){
   setTimeout(()=>URL.revokeObjectURL(url),0);
   toast("Файл сохранён: "+name);
 }
+const IMP_INPUT=`<input type="file" id="imp-file" accept=".json,application/json" hidden>`;
+const nWorkouts=n=>n+" "+plural(n,"тренировка","тренировки","тренировок");
+async function readImportFile(el){
+  const f=el.files&&el.files[0]; if(!f) return;
+  const text=await f.text(); el.value="";
+  const r=parseBackup(text);
+  if(!r.ok){toast(r.error);return}
+  if(!S.profile){await applyImport(r);return}
+  S.pendingImport=r; S.confirm="import"; render();
+}
+async function applyImport(data){
+  S.profile=data.profile; S.workouts=data.workouts;
+  S.demo=false; S.coach=null; S.summary=null; S.confirm=null; S.pendingImport=null;
+  const ok=await store.replaceAll(S.profile,S.workouts);
+  S.tab="home"; render(); window.scrollTo(0,0);
+  if(ok) toast("Загружено: "+nWorkouts(S.workouts.length));
+}
 
 /* ---------- state ---------- */
-const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null};
+const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null};
 rebuildEx();
 
 /* ---------- derived numbers: all XP is recomputed from the log, so it never drifts ---------- */
@@ -552,6 +583,7 @@ function viewOnboard(){
     </div>
     <p id="o-err" role="alert" style="color:var(--negative);font-size:13px"></p>
     <button class="btn primary block" data-act="onb-save">Создать персонажа</button>
+    <button class="btn ghost block" data-act="imp-open">Восстановить из файла</button>${IMP_INPUT}
     <p class="meta">${store.mode==="db"?"Записи хранятся в твоём личном разделе: их видишь только ты, на любом устройстве.":"Записи хранятся в этом браузере."}</p>
   </div>`;
 }
@@ -854,9 +886,12 @@ function viewProfile(){
       <p class="sub" style="font-size:13px">Рекорд: лучший расчётный максимум на 1 раз в упражнении по формуле Эпли, вес × (1 + повторы ÷ 30). Сила группы: твой лучший результат относительно веса тела, где 100 = уверенный продвинутый уровень. Серия: недели подряд, в которых было 2 или больше тренировок. Опыт пересчитывается из записей, поэтому после удаления тренировки он тоже уменьшится.</p></div>
     <div class="card"><h2>Данные</h2>
       <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут. Сохраняй копию в файл время от времени."}</p>
-      <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button></div>
+      <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button><button class="btn" data-act="imp-open">Загрузить из файла</button></div>
+      ${S.confirm==="import"&&S.pendingImport?(()=>{const pi=S.pendingImport;return `<p class="meta">В файле ${nWorkouts(pi.workouts.length)}${pi.skipped?`, ${pi.skipped} пропущено`:""}. Сейчас записано ${S.demo?0:S.workouts.length}: они будут заменены.</p>
+      <div class="row"><button class="btn danger" data-act="imp-yes">Заменить</button><button class="btn ghost" data-act="imp-no">Отмена</button></div>`})():""}
       ${S.workouts.length||S.demo?"":`<button class="btn" data-act="demo" style="align-self:flex-start">Показать пример за 8 недель</button>`}
       ${S.demo?`<button class="btn" data-act="demo-clear" style="align-self:flex-start">Убрать пример</button>`:""}
+      ${IMP_INPUT}
     </div>
   </div>`;
 }
@@ -928,7 +963,7 @@ document.addEventListener("click",async ev=>{
     return;
   }
   const a=t.dataset.act;
-  if(!["cancel-yes","del-yes","cancel","del"].includes(a)) S.confirm=null;
+  if(!["cancel-yes","del-yes","cancel","del","imp-yes"].includes(a)) S.confirm=null;
   switch(a){
     case "onb-save":{const p=readOnb();const bw=parseFloat(String(p.bw).replace(",","."));
       if(!p.name||!p.name.trim()){showOnbErr("Введи имя персонажа.","o-name");return}
@@ -961,6 +996,9 @@ document.addEventListener("click",async ev=>{
     case "demo": S.demo=true; S.workouts=makeDemo(); S.tab="home"; render(); window.scrollTo(0,0); break;
     case "demo-clear": S.demo=false; S.workouts=[]; S.coach=null; render(); break;
     case "exp": downloadBackup(); break;
+    case "imp-open": $("#imp-file").click(); break;
+    case "imp-yes": if(S.pendingImport) await applyImport(S.pendingImport); break;
+    case "imp-no": S.pendingImport=null; render(); break;
     case "coach": askCoach(); break;
     case "coach-reset": S.coach=null; askCoach(); break;
     case "coach-stop": if(coachCtl) coachCtl.abort(); break;
@@ -971,7 +1009,9 @@ document.addEventListener("click",async ev=>{
   }
 });
 document.addEventListener("change",async ev=>{
-  const el=ev.target; if(!el.dataset||!el.dataset.toggleEx) return;
+  const el=ev.target;
+  if(el.id==="imp-file"){await readImportFile(el);return}
+  if(!el.dataset||!el.dataset.toggleEx) return;
   const id=el.dataset.toggleEx, h=new Set(S.profile.hidden||[]); el.checked?h.delete(id):h.add(id);
   S.profile.hidden=[...h]; await store.saveProfile(S.profile);
   const m=document.querySelector("#gym-h + .meta"); if(m) m.textContent=gymName()+" · "+ALL.filter(e=>!isHidden(e.id)).length+" из "+ALL.length+" тренажёров и упражнений";
