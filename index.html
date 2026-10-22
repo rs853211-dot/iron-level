@@ -365,6 +365,20 @@ function parseBackup(text){
   }
   return {ok:true,profile,workouts,skipped};
 }
+/* iPhone: share sheet ("Save to Files"); elsewhere: a plain download */
+async function downloadBackup(){
+  const name="iron-level-"+today()+".json";
+  const json=JSON.stringify(makeBackup(S.profile,S.workouts,S.demo),null,2);
+  const file=new File([json],name,{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file]});return}
+    catch(e){if(e&&e.name==="AbortError")return}
+  }
+  const url=URL.createObjectURL(file), a=document.createElement("a");
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+  toast("Файл сохранён: "+name);
+}
 
 /* ---------- state ---------- */
 const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null};
@@ -839,7 +853,8 @@ function viewProfile(){
     <div class="card"><h2>Как считается</h2>
       <p class="sub" style="font-size:13px">Рекорд: лучший расчётный максимум на 1 раз в упражнении по формуле Эпли, вес × (1 + повторы ÷ 30). Сила группы: твой лучший результат относительно веса тела, где 100 = уверенный продвинутый уровень. Серия: недели подряд, в которых было 2 или больше тренировок. Опыт пересчитывается из записей, поэтому после удаления тренировки он тоже уменьшится.</p></div>
     <div class="card"><h2>Данные</h2>
-      <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут."}</p>
+      <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут. Сохраняй копию в файл время от времени."}</p>
+      <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button></div>
       ${S.workouts.length||S.demo?"":`<button class="btn" data-act="demo" style="align-self:flex-start">Показать пример за 8 недель</button>`}
       ${S.demo?`<button class="btn" data-act="demo-clear" style="align-self:flex-start">Убрать пример</button>`:""}
     </div>
@@ -945,6 +960,7 @@ document.addEventListener("click",async ev=>{
       Object.assign(S.profile,v); await store.saveProfile(S.profile); render(); toast("Профиль сохранён"); break}
     case "demo": S.demo=true; S.workouts=makeDemo(); S.tab="home"; render(); window.scrollTo(0,0); break;
     case "demo-clear": S.demo=false; S.workouts=[]; S.coach=null; render(); break;
+    case "exp": downloadBackup(); break;
     case "coach": askCoach(); break;
     case "coach-reset": S.coach=null; askCoach(); break;
     case "coach-stop": if(coachCtl) coachCtl.abort(); break;
