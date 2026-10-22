@@ -278,7 +278,8 @@ const PROGRAMS = [
   {id:"pull",n:"Пул",sl:[sl(["pull","lf-lat","lat","hs-flat"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["cab-row","lf-row","dbrow"],ISO),sl(["cab-face","lf-fly"],ABS),sl(["curl","lf-bic","cab-curl"],ISO),sl(["hammer","cab-curl"],ISO)]},
   {id:"legs",n:"Ноги",sl:[sl(["squat","smith","hs-hack"],BASE),sl(["rdl","lf-scurl"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["lf-scurl"],ISO),sl(["hs-calf"],ISO),sl(["hang","lf-abdc","cable-cr"],ABS)]}]}
 ];
-const PRM = Object.fromEntries(PROGRAMS.map(p=>[p.id,p]));
+/* no prototype, so ids from a backup file like "constructor" never match */
+const PRM = Object.assign(Object.create(null), Object.fromEntries(PROGRAMS.map(p=>[p.id,p])));
 const progDay = (p,d) => PRM[p]&&PRM[p].days.find(x=>x.id===d);
 /* the day after the last logged day of this program; a skipped day just waits its turn */
 function nextDay(progId,workouts){
@@ -417,7 +418,7 @@ function parseBackup(text){
     height:toInt(p.height), age:toInt(p.age),
     gym:str(p.gym)&&p.gym.trim()?p.gym.trim().slice(0,40):"Crunch Fit Lichtenberg",
     hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
-    custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&c.g in GROUPS).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
+    custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&Object.hasOwn(GROUPS,c.g)).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
     createdAt:isDate(p.createdAt)?p.createdAt:today(),
     program:PRM[p.program]?p.program:null
   };
@@ -465,7 +466,7 @@ async function applyImport(data){
   const ok=await store.replaceAll(data.profile,data.workouts);
   const now=ok?data:await store.load();
   S.profile=now.profile; S.workouts=now.workouts||[];
-  S.demo=false; S.coach=null; S.summary=null;
+  S.demo=false; S.coach=null; S.summary=null; S.pday=null;
   if(ok) S.tab="home";
   render(); window.scrollTo(0,0);
   if(ok) toast("Загружено: "+nWorkouts(S.workouts.length));
@@ -1085,9 +1086,9 @@ document.addEventListener("click",async ev=>{
       if(!(bw>25&&bw<300)){showOnbErr("Введи вес тела от 25 до 300 кг, например 78.","o-bw");return}
       S.profile={name:p.name.trim(),sex:p.sex||"m",bw,height:parseInt(p.height)||null,age:parseInt(p.age)||null,gym:"Crunch Fit Lichtenberg",hidden:[],custom:[],createdAt:today()};
       await store.saveProfile(S.profile); S.tab="home"; render(); break}
-    case "start": if(S.demo){S.demo=false;S.workouts=[]} S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; draft.set(S.active); S.tab="workout"; S.sheet={g:"all",q:""}; render(); break;
+    case "start": if(S.demo){S.demo=false;S.workouts=[]} S.pday=null; S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; draft.set(S.active); S.tab="workout"; S.sheet={g:"all",q:""}; render(); break;
     case "start-prog":{const pl=planToday(); if(!pl||!pl.list.length) break;
-      if(S.demo){S.demo=false;S.workouts=[]}
+      if(S.demo){S.demo=false;S.workouts=[];D=derive()} /* lastSetsFor reads D: drop the demo log first */
       const exercises=pl.list.map(x=>{const last=lastSetsFor(x.ex), ls=last?last.sets:[];
         const sets=Array.from({length:x.s},(_,j)=>({w:ls.length?ls[Math.min(j,ls.length-1)].w:"",r:""}));
         return {ex:x.ex,goal:x.s+" × "+x.r,sets}});
@@ -1106,7 +1107,7 @@ document.addEventListener("click",async ev=>{
       if(!w.exercises.length){toast("Добавь хотя бы один подход с повторами");return}
       if(S.demo){S.demo=false;S.workouts=[]}
       S.summaryLevelBefore=derive().level;
-      S.workouts.push(w); S.active=null; draft.set(null); S.summary=w.id; S.coach=null;
+      S.workouts.push(w); S.active=null; S.pday=null; draft.set(null); S.summary=w.id; S.coach=null;
       await store.saveWorkout(w); render(); window.scrollTo(0,0); announce("Тренировка сохранена"); break}
     case "summary-done": S.summary=null; S.tab="home"; render(); window.scrollTo(0,0); break;
     case "del": S.confirm="del:"+t.dataset.id; render(); break;

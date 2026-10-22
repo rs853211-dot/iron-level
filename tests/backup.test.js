@@ -13,6 +13,7 @@ const W = [{id:"a",date:"2026-10-01",t:1,exercises:[{ex:"hs-bench",sets:[{w:"80"
 const cases = {
   "roundtrip": () => { const r = pb(S(mk(P, W, false))); return r.ok && eq(r.profile, {...P, program:null}) && eq(r.workouts, W) && r.skipped === 0 || r; },
   "prog-kept": () => { const r = pb(S({profile:{...P,program:"ppl"},workouts:[{...W[0],prog:"ppl",day:"push"}]})); return r.profile.program === "ppl" && r.workouts[0].prog === "ppl" && r.workouts[0].day === "push" || r; },
+  "prog-proto-dropped": () => { const r = pb(S({profile:{...P,program:"constructor",custom:[{id:"c-9",n:"X",g:"constructor"}]},workouts:[{...W[0],prog:"toString",day:"x"}]})); return r.ok && r.profile.program === null && r.profile.custom.length === 0 && !("prog" in r.workouts[0]) || r; },
   "prog-unknown-dropped": () => { const r = pb(S({profile:{...P,program:"zzz"},workouts:[{...W[0],prog:"ppl",day:"zzz"}]})); return r.profile.program === null && !("prog" in r.workouts[0]) && !("day" in r.workouts[0]) || r; },
   "header": () => { const b = mk(P, W, false); return b.app === "iron-level" && b.version === 1 && typeof b.exportedAt === "string" || b; },
   "demo-excluded": () => mk(P, W, true).workouts.length === 0,
