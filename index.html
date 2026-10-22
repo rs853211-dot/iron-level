@@ -122,6 +122,10 @@ p{margin:0}
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);align-items:center}
 .hero svg{width:100%;height:auto;max-height:320px;display:block}
 .fig-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.intro-fig svg{display:block;height:220px;width:auto;margin:0 auto}
+.dots{display:flex;justify-content:center;gap:8px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--control)}
+.dots i.on{background:var(--text)}
 .rank-row{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--rule)}
 .rank-row:last-child{border-bottom:0}
 .m{transition:fill .25s}
@@ -391,6 +395,10 @@ const store = {
     catch(e){toast("В браузере не хватило места для этих данных");return false}
   }
 };
+const introSeen = {
+  get(){try{return localStorage.getItem(LS+".intro")==="1"}catch(e){return true}},
+  set(){try{localStorage.setItem(LS+".intro","1")}catch(e){}}
+};
 const draft = {
   get(){try{const r=localStorage.getItem(LS+".draft");return r?JSON.parse(r):null}catch(e){return null}},
   set(v){try{v?localStorage.setItem(LS+".draft",JSON.stringify(v)):localStorage.removeItem(LS+".draft")}catch(e){}}
@@ -476,7 +484,7 @@ async function applyImport(data){
 }
 
 /* ---------- state ---------- */
-const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null, pday:null, figView:"front"};
+const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null, pday:null, figView:"front", intro:null};
 rebuildEx();
 
 /* ---------- derived numbers: all XP is recomputed from the log, so it never drifts ---------- */
@@ -704,8 +712,8 @@ const ICONS = {
  profile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
 };
 function renderTabs(){
-  const t=$("#tabs"); t.hidden=!S.profile;
-  if(!S.profile) return;
+  const t=$("#tabs"); t.hidden=!S.profile||S.intro!=null;
+  if(t.hidden) return;
   const items=[["home","Персонаж"],["workout","Тренировка"],["progress","Прогресс"],["profile","Профиль"]];
   t.innerHTML=`<div class="tabs-in">${items.map(([k,n])=>`<button class="tab" data-tab="${k}" ${S.tab===k&&!S.summary?'aria-current="page"':''}>${ICONS[k]}${k==="workout"&&S.active?'<span class="live" aria-hidden="true"></span>':''}<span>${n}${k==="workout"&&S.active?'<span class="sr"> (идёт запись)</span>':''}</span></button>`).join("")}</div>`;
 }
@@ -715,6 +723,7 @@ function render(){
   D=derive();
   const app=$("#app");
   if(!S.profile){app.innerHTML=viewOnboard();renderTabs();return}
+  if(S.intro!=null){app.innerHTML=viewIntro();renderTabs();return}
   const html = S.summary ? viewSummary() : S.tab==="home"?viewHome():S.tab==="workout"?viewWorkout():S.tab==="progress"?viewProgress():viewProfile();
   app.innerHTML = html + (S.sheet?viewSheet():"");
   renderTabs();
@@ -722,6 +731,36 @@ function render(){
 function toast(msg){const el=document.createElement("div");el.className="toast";el.setAttribute("role","status");el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2600)}
 
 /* ---------- views ---------- */
+/* first-use walkthrough: one screen per part of the app; reopened from Профиль → Как считается */
+const INTRO = [
+ {t:"Это твой персонаж",p:"Он растёт вместе с рабочими весами. Чем сильнее группа мышц, тем она шире и светлее.",fig:true,
+  rows:[["Жёлтым","группы, которые ты проработал сегодня"],["Пунктиром","группа, которая отстаёт сильнее всего"],["Спереди | Сзади","переключатель под персонажем"]]},
+ {t:"Тренировка",p:"На вкладке «Тренировка» начни запись, добавь упражнения и вводи вес и повторы по подходам.",
+  rows:[["Подсказка веса","по твоему прошлому разу в этом упражнении"],["PR","номер подхода меняется на PR, если это новый рекорд"],["Черновик","запись сохраняется, даже если закрыть приложение"]]},
+ {t:"Программы",p:"В профиле выбери программу. Тогда на вкладке «Тренировка» появится день с готовыми упражнениями, подходами и повторами.",
+  rows:[["Фулбади","3 раза в неделю, для начала"],["Верх-низ","4 раза в неделю"],["Пуш-пул-ноги","3 или 6 раз в неделю"],["Следующий день","программа сама знает, какой день дальше"]]},
+ {t:"Опыт и уровни",p:"За тренировки начисляется опыт. Уровни, рекорды и достижения считаются по журналу: удалишь тренировку, и опыт честно уменьшится.",
+  rows:[["Подход","+"+XP.set+" XP"],["Рекорд в упражнении","+"+XP.pr+" XP"],["Тренировка завершена","+"+XP.done+" XP"],["Задание на сегодня","+"+XP.quest+" XP"],["Третья тренировка за неделю","+10%"]]},
+ {t:"Ранги и отдых",p:"У каждой группы мышц свой ранг по силе. Группе, которую ты качал сегодня или вчера, лучше дать отдохнуть.",
+  rows:[["Бронза → Элита","пять рангов, сила от 0 до 100"],["Отдыхает","группу качали сегодня или вчера"],["Перерыв","дней с прошлой тренировки"],["Серия","недели подряд с двумя и больше тренировками"]]},
+ {t:"Твой зал и данные",p:"Записи хранятся только на этом телефоне. Время от времени сохраняй копию в файл.",
+  rows:[["Мой зал","убери тренажёры, которых нет, и добавь свои"],["Сохранить в файл","резервная копия в «Файлы» или iCloud"],["Загрузить из файла","перенос на новый телефон"],["ИИ-тренер","разбор тренировок, когда приложение открыто в Claude"]]}
+];
+function viewIntro(){
+  const i=S.intro, sl=INTRO[i], last=i===INTRO.length-1;
+  const rows=sl.rows.map(([a,b])=>/^\+/.test(b)
+    ?`<div class="li" style="min-height:44px"><span class="grow">${a}</span><span class="fig">${b}</span></div>`
+    :`<div class="li" style="min-height:52px;align-items:flex-start"><span class="grow"><span style="font-weight:500;display:block">${a}</span><span class="meta">${b}</span></span></div>`).join("");
+  return `<div class="stack intro" style="padding-top:20px">
+    <div class="row between"><span class="meta num">${i+1} из ${INTRO.length}</span><button class="link" data-act="intro-done">Пропустить</button></div>
+    ${sl.fig?`<div class="intro-fig">${figure(S.profile.sex,{chest:.55,back:.4,legs:.7,shoulders:.5,arms:.45,core:.3},{worked:new Set(["legs"]),lag:"core",label:"Пример персонажа"})}</div>`:""}
+    <div class="tight"><h1>${sl.t}</h1><p class="sub">${sl.p}</p></div>
+    <div class="card"><div class="list">${rows}</div></div>
+    <div class="dots" aria-hidden="true">${INTRO.map((_,j)=>`<i${j===i?' class="on"':""}></i>`).join("")}</div>
+    <div class="grid2"><button class="btn ghost" data-act="intro-prev" ${i?"":"disabled"}>Назад</button>
+      <button class="btn primary" data-act="${last?"intro-done":"intro-next"}">${last?"Начать":"Дальше"}</button></div>
+  </div>`;
+}
 function viewOnboard(){
   const p=S.onb||{sex:"m"};
   return `<div class="stack" style="padding-top:20px">
@@ -1067,7 +1106,8 @@ function viewProfile(){
     <div class="card"><div class="row between"><h2>Достижения</h2><span class="meta num">${on} из ${ACH.length}</span></div>
       <div class="list">${sorted.map(a=>achRow(a,d.unlocked[a.id])).join("")}</div></div>
     <div class="card"><h2>Как считается</h2>
-      <p class="sub" style="font-size:13px">Рекорд: лучший расчётный максимум на 1 раз в упражнении по формуле Эпли, вес × (1 + повторы ÷ 30). Сила группы: твой лучший результат относительно веса тела, где 100 = уверенный продвинутый уровень. Серия: недели подряд, в которых было 2 или больше тренировок. Опыт пересчитывается из записей, поэтому после удаления тренировки он тоже уменьшится.</p></div>
+      <p class="sub" style="font-size:13px">Рекорд: лучший расчётный максимум на 1 раз в упражнении по формуле Эпли, вес × (1 + повторы ÷ 30). Сила группы: твой лучший результат относительно веса тела, где 100 = уверенный продвинутый уровень. Серия: недели подряд, в которых было 2 или больше тренировок. Опыт пересчитывается из записей, поэтому после удаления тренировки он тоже уменьшится.</p>
+      <button class="btn" data-act="intro-open" style="align-self:flex-start">Как пользоваться</button></div>
     <div class="card"><h2>Данные</h2>
       <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут. Сохраняй копию в файл время от времени."}</p>
       <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button><button class="btn" data-act="imp-open">Загрузить из файла</button></div>
@@ -1156,7 +1196,7 @@ document.addEventListener("click",async ev=>{
       if(!p.name||!p.name.trim()){showOnbErr("Введи имя персонажа.","o-name");return}
       if(!(bw>25&&bw<300)){showOnbErr("Введи вес тела от 25 до 300 кг, например 78.","o-bw");return}
       S.profile={name:p.name.trim(),sex:p.sex||"m",bw,height:parseInt(p.height)||null,age:parseInt(p.age)||null,gym:"Crunch Fit Lichtenberg",hidden:[],custom:[],createdAt:today()};
-      await store.saveProfile(S.profile); S.tab="home"; render(); break}
+      await store.saveProfile(S.profile); S.tab="home"; if(!introSeen.get()) S.intro=0; render(); break}
     case "start": if(S.demo){S.demo=false;S.workouts=[]} S.pday=null; S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; draft.set(S.active); S.tab="workout"; S.sheet={g:"all",q:""}; render(); break;
     case "start-prog":{const pl=planToday(); if(!pl||!pl.list.length) break;
       if(S.demo){S.demo=false;S.workouts=[];D=derive()} /* lastSetsFor reads D: drop the demo log first */
@@ -1165,6 +1205,10 @@ document.addEventListener("click",async ev=>{
         return {ex:x.ex,goal:x.s+" × "+x.r,sets}});
       S.active={id:uid(),date:today(),t:Date.now(),prog:pl.pid,day:pl.day,exercises}; S.pday=null; S.sheet=null;
       draft.set(S.active); S.tab="workout"; render(); window.scrollTo(0,0); break}
+    case "intro-next": S.intro=Math.min(S.intro+1,INTRO.length-1); render(); window.scrollTo(0,0); break;
+    case "intro-prev": S.intro=Math.max(S.intro-1,0); render(); window.scrollTo(0,0); break;
+    case "intro-done": S.intro=null; introSeen.set(); render(); window.scrollTo(0,0); break;
+    case "intro-open": S.intro=0; render(); window.scrollTo(0,0); break;
     case "go-workout": S.tab="workout"; render(); break;
     case "open-lib": S.sheet={g:"all",q:""}; render(); break;
     case "close-sheet": S.sheet=null; render(); break;
@@ -1239,6 +1283,7 @@ window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g
   const data=await store.load();
   S.profile=data.profile; S.workouts=data.workouts||[];
   const dr=draft.get(); if(dr&&dr.exercises) S.active=dr;
+  if(S.profile&&!introSeen.get()) S.intro=0;
   render();
 })();
 })();
