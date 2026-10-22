@@ -11,7 +11,9 @@ const P = {name:"Тест",sex:"m",bw:80,height:180,age:30,gym:"X",hidden:[],cus
 const W = [{id:"a",date:"2026-10-01",t:1,exercises:[{ex:"hs-bench",sets:[{w:"80",r:"5"}]}]}];
 
 const cases = {
-  "roundtrip": () => { const r = pb(S(mk(P, W, false))); return r.ok && eq(r.profile, P) && eq(r.workouts, W) && r.skipped === 0 || r; },
+  "roundtrip": () => { const r = pb(S(mk(P, W, false))); return r.ok && eq(r.profile, {...P, program:null}) && eq(r.workouts, W) && r.skipped === 0 || r; },
+  "prog-kept": () => { const r = pb(S({profile:{...P,program:"ppl"},workouts:[{...W[0],prog:"ppl",day:"push"}]})); return r.profile.program === "ppl" && r.workouts[0].prog === "ppl" && r.workouts[0].day === "push" || r; },
+  "prog-unknown-dropped": () => { const r = pb(S({profile:{...P,program:"zzz"},workouts:[{...W[0],prog:"ppl",day:"zzz"}]})); return r.profile.program === null && !("prog" in r.workouts[0]) && !("day" in r.workouts[0]) || r; },
   "header": () => { const b = mk(P, W, false); return b.app === "iron-level" && b.version === 1 && typeof b.exportedAt === "string" || b; },
   "demo-excluded": () => mk(P, W, true).workouts.length === 0,
   "bad-json": () => { const r = pb("{nope"); return r.ok === false && r.error === "Не получилось прочитать файл. Это точно JSON из Iron Level?" || r; },

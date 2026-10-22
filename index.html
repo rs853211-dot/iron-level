@@ -83,6 +83,9 @@ p{margin:0}
 .seg button{flex:1;height:36px;border-radius:999px;font-size:13px;font-weight:500;color:var(--faint);transition:color .15s,background-color .15s}
 .seg button:hover{color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--raised);color:var(--text)}
+.prog-seg{flex-direction:column;border-radius:16px}
+.prog-seg button{height:auto;min-height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:8px 14px;text-align:left}
+.prog-seg .meta{font-weight:400}
 .track{height:8px;border-radius:99px;background:var(--raised);overflow:hidden}
 .track > i{display:block;height:100%;border-radius:99px;background:var(--accent)}
 .track.grey > i{background:var(--chart-2)}
@@ -415,7 +418,8 @@ function parseBackup(text){
     gym:str(p.gym)&&p.gym.trim()?p.gym.trim().slice(0,40):"Crunch Fit Lichtenberg",
     hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
     custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&c.g in GROUPS).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
-    createdAt:isDate(p.createdAt)?p.createdAt:today()
+    createdAt:isDate(p.createdAt)?p.createdAt:today(),
+    program:PRM[p.program]?p.program:null
   };
   const seen=new Set(), workouts=[]; let skipped=0;
   for(const w of o.workouts){
@@ -423,7 +427,9 @@ function parseBackup(text){
     seen.add(w.id);
     const exercises=w.exercises.filter(e=>isObj(e)&&safeId(e.ex)&&Array.isArray(e.sets))
       .map(e=>({ex:e.ex,sets:e.sets.filter(isObj).map(s=>({w:String(s.w??"0"),r:String(s.r??"0")}))}));
-    const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t; out.exercises=exercises;
+    const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t;
+    if(str(w.prog)&&str(w.day)&&progDay(w.prog,w.day)){out.prog=w.prog;out.day=w.day}
+    out.exercises=exercises;
     workouts.push(out);
   }
   return {ok:true,profile,workouts,skipped};
@@ -967,6 +973,8 @@ function viewProfile(){
       <div class="seg" role="group" aria-label="Фигура персонажа">${[["m","Мужской"],["f","Женский"]].map(([k,n])=>`<button data-psex="${k}" aria-pressed="${p.sex===k}">${n}</button>`).join("")}</div>
       <button class="btn primary" data-act="p-save" style="align-self:flex-end">Сохранить</button>
     </div>
+    <div class="card"><h2>Программа</h2>
+      <div class="seg prog-seg" role="group" aria-label="Программа тренировок">${[{id:"",n:"Без программы",sub:"Собираешь тренировку сам"}].concat(PROGRAMS).map(o=>`<button data-prog="${o.id}" aria-pressed="${(p.program||"")===o.id}"><span>${o.n}</span><span class="meta">${o.sub}</span></button>`).join("")}</div></div>
     <div class="card"><div class="row between"><h2>Мой зал</h2><span class="meta num">${ALL.filter(e=>!isHidden(e.id)).length} из ${ALL.length}</span></div>
       <p class="sub" style="font-size:13px">Тренажёры ${esc(gymName())}: Hammer Strength, Life Fitness, кроссовер, свободные веса${(p.custom||[]).length?` и ${(p.custom||[]).length} ${plural((p.custom||[]).length,"свой","своих","своих")}`:""}. Убери то, чего нет в зале, и добавь недостающее.</p>
       <button class="btn" data-act="open-gym" style="align-self:flex-start">Настроить тренажёры</button></div>
@@ -1035,11 +1043,12 @@ ${recent}
 
 /* ---------- events ---------- */
 document.addEventListener("click",async ev=>{
-  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex]");
+  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex],[data-prog],[data-pday]");
   if(!t) return;
   if(t.dataset.act==="close-sheet" && t.classList.contains("sheet-bg") && ev.target.closest("[data-stop]")) return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.summary=null;S.confirm=null;S.sheet=null;render();window.scrollTo(0,0);return}
   if(t.dataset.onbSex){S.onb=Object.assign(readOnb(),{sex:t.dataset.onbSex});render();return}
+  if(t.dataset.prog!==undefined){const id=t.dataset.prog||null;S.profile.program=id;S.pday=null;store.saveProfile(S.profile);render();toast(id?"Программа: "+PRM[id].n:"Без программы");return}
   if(t.dataset.psex){Object.assign(S.profile,readProfileInputs(),{sex:t.dataset.psex});store.saveProfile(S.profile);render();return}
   if(t.dataset.period){S.period=t.dataset.period;render();return}
   if(t.dataset.libg){S.sheet.g=t.dataset.libg;render();return}
