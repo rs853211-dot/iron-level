@@ -256,6 +256,46 @@ const EX = [
  {id:"hang",n:"Подъём ног в висе",g:"core",t:2.2,bw:true,z:"bw"}
 ];
 const CUSTOM_T = {chest:1.1,back:1.1,legs:2.5,shoulders:.8,arms:.55,core:.8};
+
+/* ---------- programs: each slot lists catalog ids by preference; a hidden one falls back to its muscle group ---------- */
+const EXG = Object.fromEntries(EX.map(e=>[e.id,e.g]));
+const sl = (o,r) => ({o, s:3, r, g:EXG[o[0]]});
+const BASE="6–8", ISO="10–12", ABS="12–15";
+const PROGRAMS = [
+ {id:"fb",n:"Фулбади",sub:"3 раза в неделю, для начала",days:[
+  {id:"a",n:"Тренировка А",sl:[sl(["squat","smith","hs-hack","lf-legp"],BASE),sl(["bench","hs-bench","lf-chest"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["ohp","dbsp","hs-shp","lf-shp"],BASE),sl(["lf-abdc","hs-ab","cable-cr","hang"],ABS)]},
+  {id:"b",n:"Тренировка Б",sl:[sl(["rdl","lf-scurl"],BASE),sl(["incdb","hs-incl","incbb","lf-chest"],BASE),sl(["pull","lf-lat","lat","hs-flat"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["curl","lf-bic","cab-curl","hammer"],ISO),sl(["pushd","lf-tri","french"],ISO)]}]},
+ {id:"ul",n:"Верх-низ",sub:"4 раза в неделю",days:[
+  {id:"u1",n:"Верх А",sl:[sl(["bench","hs-bench","lf-chest"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["ohp","hs-shp","lf-shp","dbsp"],BASE),sl(["pull","lf-lat","lat","hs-flat"],ISO),sl(["curl","lf-bic","cab-curl"],ISO),sl(["pushd","lf-tri","french"],ISO)]},
+  {id:"l1",n:"Низ А",sl:[sl(["squat","smith","hs-hack"],BASE),sl(["rdl","lf-scurl"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["hs-calf"],ISO),sl(["hang","lf-abdc","hs-ab","cable-cr"],ABS)]},
+  {id:"u2",n:"Верх Б",sl:[sl(["incdb","hs-incl","incbb"],BASE),sl(["hs-hrow","lf-lat","lat"],BASE),sl(["dbsp","lf-shp","hs-shp"],ISO),sl(["lf-row","cab-row","hs-lrow","dbrow"],ISO),sl(["lat-r","cab-face"],ISO),sl(["hammer","cab-curl","lf-bic"],ISO)]},
+  {id:"l2",n:"Низ Б",sl:[sl(["dead","rdl"],BASE),sl(["hs-hack","smith","lf-legp"],ISO),sl(["lf-scurl"],ISO),sl(["lunge","lf-glute","hipthr"],ISO),sl(["hyper","lf-back"],ABS)]}]},
+ {id:"ppl",n:"Пуш-пул-ноги",sub:"3 или 6 раз в неделю",days:[
+  {id:"push",n:"Пуш",sl:[sl(["bench","hs-bench","lf-chest"],BASE),sl(["ohp","hs-shp","lf-shp","dbsp"],BASE),sl(["incdb","hs-incl","incbb"],ISO),sl(["fly","lf-fly"],ISO),sl(["lat-r","cab-face"],ISO),sl(["pushd","lf-tri","french"],ISO)]},
+  {id:"pull",n:"Пул",sl:[sl(["pull","lf-lat","lat","hs-flat"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["cab-row","lf-row","dbrow"],ISO),sl(["cab-face","lf-fly"],ABS),sl(["curl","lf-bic","cab-curl"],ISO),sl(["hammer","cab-curl"],ISO)]},
+  {id:"legs",n:"Ноги",sl:[sl(["squat","smith","hs-hack"],BASE),sl(["rdl","lf-scurl"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["lf-scurl"],ISO),sl(["hs-calf"],ISO),sl(["hang","lf-abdc","cable-cr"],ABS)]}]}
+];
+const PRM = Object.fromEntries(PROGRAMS.map(p=>[p.id,p]));
+const progDay = (p,d) => PRM[p]&&PRM[p].days.find(x=>x.id===d);
+/* the day after the last logged day of this program; a skipped day just waits its turn */
+function nextDay(progId,workouts){
+  const days=PRM[progId].days;
+  const mine=workouts.filter(w=>w.prog===progId&&progDay(progId,w.day))
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.t||0)-(b.t||0));
+  if(!mine.length) return days[0].id;
+  const i=days.findIndex(d=>d.id===mine[mine.length-1].day);
+  return days[(i+1)%days.length].id;
+}
+function buildDay(progId,dayId,hidden,all){
+  const have=new Set(all.map(e=>e.id)), used=new Set(), out=[];
+  const ok=id=>have.has(id)&&!hidden.has(id)&&!used.has(id);
+  for(const s of progDay(progId,dayId).sl){
+    const id=s.o.find(ok)||(all.find(e=>e.g===s.g&&ok(e.id))||{}).id;
+    if(!id) continue;
+    used.add(id); out.push({ex:id,s:s.s,r:s.r});
+  }
+  return out;
+}
 let EXM = {}, ALL = [];
 function rebuildEx(){
   const custom = ((S.profile&&S.profile.custom)||[]).map(c=>Object.assign({t:CUSTOM_T[c.g]||1,z:"custom"},c));
@@ -1086,6 +1126,7 @@ document.addEventListener("input",ev=>{
 });
 
 window.ironLevelBackup={makeBackup,parseBackup};
+window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
 
 /* ---------- boot ---------- */
 (async function boot(){
