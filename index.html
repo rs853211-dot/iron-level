@@ -121,6 +121,7 @@ p{margin:0}
 /* character */
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);align-items:center}
 .hero svg{width:100%;height:auto;max-height:320px;display:block}
+.fig-col{display:flex;flex-direction:column;gap:10px;min-width:0}
 .m{transition:fill .25s}
 .m.worked{fill:var(--accent)}
 .m.lag{stroke:var(--text);stroke-width:1.6;stroke-dasharray:4 3}
@@ -473,7 +474,7 @@ async function applyImport(data){
 }
 
 /* ---------- state ---------- */
-const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null, pday:null};
+const S = {profile:null, workouts:[], demo:false, tab:"home", active:null, summary:null, sheet:null, period:"4w", coach:null, confirm:null, pendingImport:null, pday:null, figView:"front"};
 rebuildEx();
 
 /* ---------- derived numbers: all XP is recomputed from the log, so it never drifts ---------- */
@@ -557,11 +558,12 @@ const ACH = [
 ACH.forEach(a=>a.test=c=>{const [h,n]=a.p(c);return h>=n});
 
 /* ---------- character (signature element): each group's size follows its strength ----------
-   Front view, flat: a --body silhouette with --muscle shapes laid on top; the thin --body gaps between
-   them are the only anatomy lines. Every shape is drawn once per side through mp(), mirrored about cx.
+   Flat mannequin: a --body silhouette with --muscle shapes laid on top. Every muscle carries a thin
+   --body outline, so overlapping shapes read as separate muscles. opt.view "back" turns it round:
+   same silhouette, back muscles. Every shape is drawn once per side through mp(), mirrored about cx.
    Strength 0..1 per group widens its muscles and the silhouette under them; nothing else moves. */
 function figure(sex,g,opt){
-  opt=opt||{}; const w=opt.worked||new Set(), lag=opt.lag;
+  opt=opt||{}; const w=opt.worked||new Set(), lag=opt.lag, back=opt.view==="back";
   const f=sex==="f", cx=100, B="var(--body)", M="var(--muscle)", R="var(--raised)";
   const cls=k=>"m"+(w.has(k)?" worked":"")+(k===lag&&!w.has(k)?" lag":"");
   const v=k=>Math.max(0,Math.min(1,g[k]||0));
@@ -570,71 +572,98 @@ function figure(sex,g,opt){
   const NK=(f?6:7)+2.5*gB, SH=(f?31:35)+5*gS+3*gB, AX=SH+3, LAT=(f?25:28)+8*gB,
         WA=f?18:21, HP=f?27:25, LC=f?15:16, UA=(f?6:7)+6*gA, FA=(f?5:5.5)+2.5*gA, TH=gL*(f?5:6);
   const mp=(s,c)=>c.map(t=>typeof t==="string"?t:(+(cx+s*t[0]).toFixed(1))+" "+(+t[1].toFixed(1))).join(" ");
-  const sym=(c,fill,k)=>[-1,1].map(s=>`<path${k?` class="${cls(k)}"`:""} d="${mp(s,c)}" fill="${fill}"/>`).join("");
+  const sym=(c,fill,k)=>[-1,1].map(s=>`<path${k?` class="${cls(k)}" stroke="${B}" stroke-width="1.4" stroke-linejoin="round"`:""} d="${mp(s,c)}" fill="${fill}"/>`).join("");
   const P=[];
-  /* hair behind the head (f) */
-  if(f) P.push(`<path d="M83 34 C80 12 92 7 100 7 C108 7 120 12 117 34 L119 56 Q111 59 108 48 L92 48 Q89 59 81 56 Z" fill="${R}"/>`);
+  /* hair behind the head (f, front) */
+  if(f&&!back) P.push(`<path d="M83 34 C80 12 92 7 100 7 C108 7 120 12 117 34 L119 56 Q111 59 108 48 L92 48 Q89 59 81 56 Z" fill="${R}"/>`);
   /* legs and feet */
   P.push(sym(["M",[2,198],"L",[HP,190],"Q",[HP+3+TH*.6,222],[LC+10+TH*.5,262],"L",[LC+8,276],
     "Q",[LC+11+TH*.5,292],[LC+6,316],"L",[LC+5,322],"L",[LC-4,322],"Q",[LC-9-TH*.5,296],[LC-7,276],
     "L",[LC-8,262],"Q",[LC-12-TH*.4,238],[2,214],"Z"],B));
-  P.push(sym(["M",[LC-5,319],"Q",[LC-7,330],[LC+1,331],"Q",[LC+12,332],[LC+12,327],"Q",[LC+9,320],[LC+4,319],"Z"],B));
+  P.push(sym(back?["M",[LC-5,319],"Q",[LC-6,329],[LC+2,330],"Q",[LC+8,330],[LC+7,321],"Z"]
+    :["M",[LC-5,319],"Q",[LC-7,330],[LC+1,331],"Q",[LC+12,332],[LC+12,327],"Q",[LC+9,320],[LC+4,319],"Z"],B));
   /* torso with neck: lats flare under the armpit, then a tapered waist */
   P.push(sym(["M",[0,44],"L",[NK,44],"L",[NK,58],"Q",[NK+9,63],[SH-6,68],"Q",[SH,70],[SH,82],
     "L",[SH-5,96],"Q",[LAT+1,106],[LAT-1,122],"Q",[WA,144],[WA,160],"Q",[WA,176],[HP,192],
     "L",[HP-1,206],"L",[0,208],"Z"],B));
-  /* shorts */
-  const SB=f?214:226;
-  P.push(sym(["M",[0,178],"L",[WA+1,178],"Q",[HP+1,184],[HP+(f?-.5:1.5)+TH*.6,SB],"Q",[LC+2,SB+3],[3,SB-4],
-    "L",[0,206],"Z"],R));
-  /* quads: the outer sweep and the teardrop above the knee */
-  P.push(sym(["M",[LC-1,SB-6],"Q",[HP+1+TH*.6,SB+2],[LC+9+TH*.5,256],"Q",[LC+6,266],[LC+1,263],
-    "Q",[LC-3,242],[LC-1,SB-6],"Z"],M,"legs"));
-  P.push(sym(["M",[LC-3,SB+2],"Q",[LC-11-TH*.5,246],[LC-5,268],"Q",[LC,269],[LC-.5,259],
-    "Q",[LC-2,240],[LC-3,SB+2],"Z"],M,"legs"));
-  /* calves, both heads showing past the shin */
-  P.push(sym(["M",[LC-5,279],"Q",[LC-11-TH*.5,290],[LC-5,309],"Q",[LC-1,296],[LC-2,281],"Z"],M,"legs"));
-  P.push(sym(["M",[LC+6,279],"Q",[LC+11+TH*.5,289],[LC+6,305],"Q",[LC+3,292],[LC+4,281],"Z"],M,"legs"));
-  /* back, seen from the front: traps from neck to shoulder, lats behind the ribs */
-  P.push(sym(["M",[NK+.5,53],"Q",[NK+4,60+2*gB],[SH-8,67],"Q",[NK+7,69],[NK+1,64],"Z"],M,"back"));
-  P.push(sym(["M",[SH-8,96],"Q",[LAT+2,106],[LAT-1,122],"Q",[WA+3,140],[WA+1,152],
-    "Q",[WA-2,136],[SH-14,108],"Z"],M,"back"));
-  /* abs: three pairs and the lower V, then the obliques */
-  const aw=(f?8:9)+2.5*gO, ah=(f?9.5:10)+1.5*gO, a0=f?120:118;
-  for(let r=0;r<3;r++) P.push(sym(["M",[1.5,a0+r*(ah+3)+3],"Q",[1.5,a0+r*(ah+3)],[4.5,a0+r*(ah+3)],
-    "L",[aw-2,a0+r*(ah+3)],"Q",[aw,a0+r*(ah+3)],[aw,a0+r*(ah+3)+3],"L",[aw-.5,a0+r*(ah+3)+ah-2],
-    "Q",[aw-.5,a0+r*(ah+3)+ah],[aw-3,a0+r*(ah+3)+ah],"L",[4,a0+r*(ah+3)+ah],"Q",[1.5,a0+r*(ah+3)+ah],
-    [1.5,a0+r*(ah+3)+ah-2.5],"Z"],M,"core"));
-  const a4=a0+3*(ah+3);
-  P.push(sym(["M",[1.5,a4],"L",[aw-1,a4],"Q",[aw-2,a4+10],[1.5,a4+17],"Z"],M,"core"));
-  P.push(sym(["M",[aw+3.5,a0+4],"Q",[WA+4,a0+10],[WA+.5,158],"Q",[WA-2,168],[aw+4,a4+12],
-    "Q",[aw+2,a0+30],[aw+3.5,a0+4],"Z"],M,"core"));
-  /* chest: plates with a lower edge that drops as they grow; (f) upper chest above a sports top */
-  if(f){
-    P.push(sym(["M",[2,82],"L",[SH-12,78],"Q",[SH-5,84],[SH-7,95],"Q",[SH-12,103+2*gC],[10,101+2*gC],
-      "Q",[4,99],[2,95],"Z"],M,"chest"));
-    P.push(sym(["M",[SH-14,80],"L",[SH-11,80],"L",[SH-9,94],"L",[SH-12,94],"Z"],R));
-    P.push(sym(["M",[0,98],"Q",[6,92+1.5*gC],[13+2*gC,92],"Q",[SH-9,91],[SH-8,96],"L",[LAT-3,108],
-      "Q",[LAT-3.5,114],[LAT-5,117],"Q",[12,121],[0,118],"Z"],R));
-  } else P.push(sym(["M",[2,80],"L",[SH-12,76],"Q",[SH-4,82],[SH-5,94],"Q",[SH-9,110+6*gC],[14+3*gC,112+6*gC],
-    "Q",[5,112+5*gC],[2,105+4*gC],"Z"],M,"chest"));
+  if(!back){
+    /* thighs: outer sweep from the hip, teardrop above the knee, adductors inside */
+    P.push(sym(["M",[2,202],"L",[LC-5,199],"Q",[LC-6,222],[LC-9-TH*.3,240],"Q",[4,228],[2,212],"Z"],M,"legs"));
+    P.push(sym(["M",[LC-3,197],"Q",[HP+2+TH*.6,203],[LC+9+TH*.5,256],"Q",[LC+6,266],[LC+1,263],
+      "Q",[LC-4,232],[LC-3,197],"Z"],M,"legs"));
+    P.push(sym(["M",[LC-3,226],"Q",[LC-11-TH*.5,246],[LC-5,268],"Q",[LC,269],[LC-.5,259],
+      "Q",[LC-2,240],[LC-3,226],"Z"],M,"legs"));
+    /* calves, both heads showing past the shin */
+    P.push(sym(["M",[LC-5,279],"Q",[LC-11-TH*.5,290],[LC-5,309],"Q",[LC-1,296],[LC-2,281],"Z"],M,"legs"));
+    P.push(sym(["M",[LC+6,279],"Q",[LC+11+TH*.5,289],[LC+6,305],"Q",[LC+3,292],[LC+4,281],"Z"],M,"legs"));
+    /* back, seen from the front: traps from neck to shoulder, lats behind the ribs */
+    P.push(sym(["M",[NK+.5,53],"Q",[NK+4,60+2*gB],[SH-8,67],"Q",[NK+7,69],[NK+1,64],"Z"],M,"back"));
+    P.push(sym(["M",[SH-8,96],"Q",[LAT+2,106],[LAT-1,122],"Q",[WA+3,140],[WA+1,152],
+      "Q",[WA-2,136],[SH-14,108],"Z"],M,"back"));
+    /* abs: three pairs and the lower V, then the obliques */
+    const aw=(f?8:9)+2.5*gO, ah=(f?9.5:10)+1.5*gO, a0=f?120:118;
+    for(let r=0;r<3;r++){const y=a0+r*(ah+3); P.push(sym(["M",[1.5,y+3],"Q",[1.5,y],[4.5,y],"L",[aw-2,y],
+      "Q",[aw,y],[aw,y+3],"L",[aw-.5,y+ah-2],"Q",[aw-.5,y+ah],[aw-3,y+ah],"L",[4,y+ah],"Q",[1.5,y+ah],
+      [1.5,y+ah-2.5],"Z"],M,"core"))}
+    const a4=a0+3*(ah+3);
+    P.push(sym(["M",[1.5,a4],"L",[aw-1,a4],"Q",[aw-2,a4+10],[1.5,a4+17],"Z"],M,"core"));
+    P.push(sym(["M",[aw+3.5,a0+4],"Q",[WA+4,a0+10],[WA+.5,158],"Q",[WA-2,168],[aw+4,a4+12],
+      "Q",[aw+2,a0+30],[aw+3.5,a0+4],"Z"],M,"core"));
+    /* chest: plates with a lower edge that drops as they grow; (f) upper chest above a sports top */
+    if(f){
+      P.push(sym(["M",[2,82],"L",[SH-12,78],"Q",[SH-5,84],[SH-7,95],"Q",[SH-12,103+2*gC],[10,101+2*gC],
+        "Q",[4,99],[2,95],"Z"],M,"chest"));
+      P.push(sym(["M",[SH-14,80],"L",[SH-11,80],"L",[SH-9,94],"L",[SH-12,94],"Z"],R));
+      P.push(sym(["M",[0,98],"Q",[6,92+1.5*gC],[13+2*gC,92],"Q",[SH-9,91],[SH-8,96],"L",[LAT-3,108],
+        "Q",[LAT-3.5,114],[LAT-5,117],"Q",[12,121],[0,118],"Z"],R));
+    } else P.push(sym(["M",[2,80],"L",[SH-12,76],"Q",[SH-4,82],[SH-5,94],"Q",[SH-9,110+6*gC],[14+3*gC,112+6*gC],
+      "Q",[5,112+5*gC],[2,105+4*gC],"Z"],M,"chest"));
+  } else {
+    /* glutes, then hamstrings in two strips, then the calf's two big heads */
+    P.push(sym(["M",[1.5,176],"Q",[HP-2,172],[HP+1+TH*.4,192],"Q",[HP+1,212],[LC+2,216],"Q",[6,217],
+      [1.5,210],"Z"],M,"legs"));
+    P.push(sym(["M",[LC+1,219],"Q",[HP+2+TH*.6,225],[LC+9+TH*.4,258],"Q",[LC+6,266],[LC+2,262],
+      "Q",[LC,240],[LC+1,219],"Z"],M,"legs"));
+    P.push(sym(["M",[LC-1,219],"Q",[LC-11-TH*.5,232],[LC-7,260],"Q",[LC-3,265],[LC-1,258],
+      "Q",[LC+1,238],[LC-1,219],"Z"],M,"legs"));
+    P.push(sym(["M",[LC-1,271],"Q",[LC-11-TH*.5,284],[LC-6,307],"Q",[LC-2,303],[LC,286],"Z"],M,"legs"));
+    P.push(sym(["M",[LC+1,271],"Q",[LC+11+TH*.5,282],[LC+7,303],"Q",[LC+3,301],[LC+1,286],"Z"],M,"legs"));
+    /* lower back: the obliques' back edge, then lats, spinal erectors, shoulder blades and traps on top */
+    P.push(sym(["M",[WA-2,148],"Q",[WA+2,158],[WA+1,170],"Q",[WA-3,174],[WA-7,168],"Q",[WA-6,156],[WA-2,148],"Z"],M,"core"));
+    P.push(sym(["M",[2,100],"L",[SH-8,94],"Q",[LAT+2,106],[LAT-1,124],"Q",[WA+2,146],[WA,160],
+      "Q",[12,168],[2,170],"Z"],M,"back"));
+    P.push(sym(["M",[1.5,118],"Q",[8+2*gB,122],[9+2*gB,150],"Q",[9,172],[5,182],"L",[1.5,182],"Z"],M,"back"));
+    P.push(sym(["M",[7,82],"Q",[SH-5,79],[SH-6,94],"Q",[SH-9,108],[15,108],"Q",[8,100],[7,82],"Z"],M,"back"));
+    P.push(sym(["M",[1,50],"L",[NK+.5,52],"Q",[NK+8,61],[SH-6,68],"Q",[SH-12,76],[14+3*gB,92],
+      "Q",[5,108],[1,124],"Z"],M,"back"));
+    /* (f) the sports top's band and straps */
+    if(f){
+      P.push(sym(["M",[SH-13,72],"L",[SH-10,72],"L",[SH-11,100],"L",[SH-14,100],"Z"],R));
+      P.push(sym(["M",[0,98],"L",[LAT-2,100],"Q",[LAT-3,108],[LAT-4,112],"L",[0,112],"Z"],R));
+    }
+  }
   /* arms hang slightly away from the body */
   P.push(sym(["M",[AX+6,78],"Q",[AX+8+UA*.9,110],[AX+9,146],"Q",[AX+11+FA,162],[AX+12,198],"L",[AX+5,200],
     "Q",[AX+1-FA*.4,170],[AX-1,146],"Q",[AX-UA+1,118],[AX-6,92],"Z"],B));
   P.push(sym(["M",[AX+3,197],"Q",[AX+1,210],[AX+7,214],"Q",[AX+14,212],[AX+13,197],"Z"],B));
-  P.push(sym(["M",[AX-2,100],"Q",[AX-UA+.5,118],[AX-1,138],"Q",[AX+3,144],[AX+6,138],"Q",[AX+6+UA*.9,116],
-    [AX+3,98],"Q",[AX,96],[AX-2,100],"Z"],M,"arms"));
+  /* upper arm: biceps in front, the triceps horseshoe behind */
+  P.push(sym(back?["M",[AX-2,96],"Q",[AX-UA,116],[AX-1,140],"Q",[AX+3,146],[AX+7,140],"Q",[AX+7+UA*.9,116],
+      [AX+5,96],"Q",[AX+1.5,92],[AX-2,96],"Z"]
+    :["M",[AX-2,100],"Q",[AX-UA+.5,118],[AX-1,138],"Q",[AX+3,144],[AX+6,138],"Q",[AX+6+UA*.9,116],
+      [AX+3,98],"Q",[AX,96],[AX-2,100],"Z"],M,"arms"));
   P.push(sym(["M",[AX,151],"Q",[AX+5,147],[AX+9,151],"Q",[AX+10+FA*.8,163],[AX+9,184],"Q",[AX+6,186],[AX+5,182],
     "Q",[AX+1-FA*.3,166],[AX,151],"Z"],M,"arms"));
   /* deltoids cap the shoulder joint */
   P.push(sym(["M",[SH-12,70],"Q",[SH+2,63],[AX+6+4*gS,80],"Q",[AX+8+4*gS,98],[AX+4,113],"Q",[AX-2,99],
     [SH-6,85],"Q",[SH-10,77],[SH-12,70],"Z"],M,"shoulders"));
-  /* head with ears and hair */
+  /* head with ears and hair; from behind the hair covers most of it */
   P.push(`<ellipse cx="${cx-15}" cy="33" rx="3" ry="5" fill="var(--head)"/><ellipse cx="${cx+15}" cy="33" rx="3" ry="5" fill="var(--head)"/>`);
   P.push(`<path d="M85 30 C85 17 92 12 100 12 C108 12 115 17 115 30 C115 41 110 50 100 52 C90 50 85 41 85 30 Z" fill="var(--head)"/>`);
-  P.push(f?`<path d="M85 31 C84 15 92 9 100 9 C108 9 116 15 115 31 Q107 19 93 24 Q88 26 85 31 Z" fill="${R}"/>`
-          :`<path d="M85 29 C84 15 92 10 100 10 C109 10 116 15 115 29 Q112 20 100 19 Q88 20 85 29 Z" fill="${R}"/>`);
-  return `<svg viewBox="0 0 200 340" role="img" aria-label="${esc(opt.label||"Персонаж")}">${P.join("")}</svg>`;
+  if(back) P.push(f?`<path d="M83 34 C80 12 92 7 100 7 C108 7 120 12 117 34 L119 56 Q111 59 106 50 Q100 52 94 50 Q89 59 81 56 Z" fill="${R}"/>`
+                   :`<path d="M85 30 C84 14 92 10 100 10 C108 10 116 14 115 30 Q114 40 108 44 Q100 46 92 44 Q86 40 85 30 Z" fill="${R}"/>`);
+  else P.push(f?`<path d="M85 31 C84 15 92 9 100 9 C108 9 116 15 115 31 Q107 19 93 24 Q88 26 85 31 Z" fill="${R}"/>`
+               :`<path d="M85 29 C84 15 92 10 100 10 C109 10 116 15 115 29 Q112 20 100 19 Q88 20 85 29 Z" fill="${R}"/>`);
+  return `<svg viewBox="0 0 200 340" role="img" aria-label="${esc((opt.label||"Персонаж")+(back?", вид сзади":""))}">${P.join("")}</svg>`;
 }
 
 /* ---------- shell ---------- */
@@ -710,7 +739,8 @@ function viewHome(){
         </div>
       </div>
       <div class="hero">
-        ${figure(p.sex,d.g,{worked:d.workedToday,lag:d.lag,label:`Персонаж ${p.name}: сила по группам мышц`})}
+        <div class="fig-col">${figure(p.sex,d.g,{worked:d.workedToday,lag:d.lag,view:S.figView,label:`Персонаж ${p.name}: сила по группам мышц`})}
+          <div class="seg" role="group" aria-label="Сторона персонажа">${[["front","Спереди"],["back","Сзади"]].map(([k,n])=>`<button data-figview="${k}" aria-pressed="${S.figView===k}">${n}</button>`).join("")}</div></div>
         <div class="groups-list" aria-label="Сила по группам, из 100">
           <div class="meta">Сила по группам, из 100</div>
           ${GROUP_KEYS.map(k=>`<div class="g-row"><span style="color:${k===d.lag?"var(--muted)":"var(--text)"}">${GROUPS[k]}</span><div class="track grey"><i style="width:${Math.round(d.g[k]*100)}%;${d.workedToday.has(k)?"background:var(--accent)":""}"></i></div><span>${Math.round(d.g[k]*100)}</span></div>`).join("")}
@@ -1059,12 +1089,13 @@ ${recent}
 
 /* ---------- events ---------- */
 document.addEventListener("click",async ev=>{
-  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex],[data-prog],[data-pday]");
+  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex],[data-prog],[data-pday],[data-figview]");
   if(!t) return;
   if(t.dataset.act==="close-sheet" && t.classList.contains("sheet-bg") && ev.target.closest("[data-stop]")) return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.summary=null;S.confirm=null;S.sheet=null;render();window.scrollTo(0,0);return}
   if(t.dataset.onbSex){S.onb=Object.assign(readOnb(),{sex:t.dataset.onbSex});render();return}
   if(t.dataset.prog!==undefined){const id=t.dataset.prog||null;S.profile.program=id;S.pday=null;store.saveProfile(S.profile);render();toast(id?"Программа: "+PRM[id].n:"Без программы");return}
+  if(t.dataset.figview){S.figView=t.dataset.figview;render();return}
   if(t.dataset.pday){S.pday=t.dataset.pday;render();return}
   if(t.dataset.psex){Object.assign(S.profile,readProfileInputs(),{sex:t.dataset.psex});store.saveProfile(S.profile);render();return}
   if(t.dataset.period){S.period=t.dataset.period;render();return}
