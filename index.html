@@ -199,9 +199,12 @@ button.li:hover{background:var(--raised)}
 const GROUPS = {chest:"Грудь",back:"Спина",legs:"Ноги",shoulders:"Плечи",arms:"Руки",core:"Пресс"};
 const GROUP_KEYS = Object.keys(GROUPS);
 // t = e1RM ÷ bodyweight that counts as 100 (solid advanced level). bw: bodyweight lift (bodyweight + added). per: weight is per dumbbell
+// assist: machine with a counterweight, load = bodyweight − counterweight.
 // z: zone in the gym. hint: what to enter as weight. Old ids stay so saved workouts keep reading.
-const ZONES = {hs:"Hammer Strength · рычажные",lf:"Life Fitness · блочные",cable:"Кроссовер и блоки",free:"Свободные веса",bw:"Свой вес и станции",custom:"Мои тренажёры"};
-const ZONE_ORDER = ["hs","lf","cable","free","bw","custom"];
+// Checked against videos of Crunch Fit Lichtenberg (2026-10): Hammer Strength plate-loaded and racks, Life Fitness
+// selectorized rows, a SYNRGY360 functional station, sled turf, Taurus assisted chin/dip, a decline bench.
+const ZONES = {hs:"Hammer Strength · рычажные",lf:"Life Fitness · блочные",cable:"Кроссовер и блоки",func:"Функциональная зона · SYNRGY360",free:"Свободные веса",bw:"Свой вес и станции",custom:"Мои тренажёры"};
+const ZONE_ORDER = ["hs","lf","cable","func","free","bw","custom"];
 const EX = [
  // Hammer Strength plate-loaded
  {id:"hs-bench",n:"Iso-Lateral Bench Press",ru:"жим от груди",g:"chest",t:1.4,z:"hs",plates:true},
@@ -239,10 +242,17 @@ const EX = [
  {id:"pushd",n:"Разгибания на блоке",g:"arms",t:.75,z:"cable"},
  {id:"cab-curl",n:"Сгибания на нижнем блоке",g:"arms",t:.55,z:"cable"},
  {id:"cable-cr",n:"Скручивания на блоке",g:"core",t:.7,z:"cable"},
+ // Life Fitness SYNRGY360 and the sled turf
+ {id:"s360-kbs",n:"Махи гирей",g:"legs",t:.6,z:"func"},
+ {id:"s360-gob",n:"Гоблет-присед с гирей",g:"legs",t:.6,z:"func"},
+ {id:"s360-trx",n:"Тяга в петлях TRX",g:"back",t:1.8,bw:true,z:"func"},
+ {id:"s360-slam",n:"Броски слэмбола",g:"core",t:.25,z:"func"},
+ {id:"sled",n:"Толкание саней",g:"legs",t:2.5,z:"func"},
  // free weights
  {id:"bench",n:"Жим лёжа",g:"chest",t:1.5,z:"free"},
  {id:"incbb",n:"Жим штанги на наклонной",g:"chest",t:1.25,z:"free"},
  {id:"incdb",n:"Жим гантелей на наклонной",g:"chest",t:.5,per:true,z:"free"},
+ {id:"declbb",n:"Жим лёжа головой вниз",g:"chest",t:1.6,z:"free"},
  {id:"dead",n:"Становая тяга",g:"back",t:2.5,z:"free"},
  {id:"row",n:"Тяга штанги в наклоне",g:"back",t:1.3,z:"free"},
  {id:"dbrow",n:"Тяга гантели одной рукой",g:"back",t:.6,z:"free"},
@@ -263,7 +273,10 @@ const EX = [
  {id:"pull",n:"Подтягивания",g:"back",t:1.7,bw:true,z:"bw"},
  {id:"dips",n:"Отжимания на брусьях",g:"chest",t:1.9,bw:true,z:"bw"},
  {id:"hyper",n:"Гиперэкстензия",g:"back",t:1.4,bw:true,z:"bw"},
- {id:"hang",n:"Подъём ног в висе",g:"core",t:2.2,bw:true,z:"bw"}
+ {id:"hang",n:"Подъём ног в висе",g:"core",t:2.2,bw:true,z:"bw"},
+ // Taurus IT95 weight-assisted chin/dip combo
+ {id:"as-pull",n:"Подтягивания в гравитроне",ru:"Taurus Chin/Dip",g:"back",t:1.7,assist:true,z:"bw"},
+ {id:"as-dip",n:"Отжимания на брусьях в гравитроне",ru:"Taurus Chin/Dip",g:"chest",t:1.9,assist:true,z:"bw"}
 ];
 const CUSTOM_T = {chest:1.1,back:1.1,legs:2.5,shoulders:.8,arms:.55,core:.8};
 
@@ -314,7 +327,7 @@ function rebuildEx(){
 }
 const isHidden = id => !!(S.profile&&S.profile.hidden&&S.profile.hidden.includes(id));
 const exTitle = e => e.ru ? `${e.n} · ${e.ru}` : e.n;
-const exHint = e => e.bw?"вес тела плюс доп. вес":e.per?"вес одной гантели":e.plates?"блины на обе стороны, кг":e.z==="lf"||e.z==="cable"?"вес на стеке":"";
+const exHint = e => e.bw?"вес тела плюс доп. вес":e.assist?"противовес: чем меньше, тем тяжелее":e.per?"вес одной гантели":e.plates?"блины на обе стороны, кг":e.z==="lf"||e.z==="cable"?"вес на стеке":"";
 const XP = {set:5, pr:25, done:30, quest:15, week3:.10};
 const levelNeed = L => 100 + 50*(L-1);
 const rankOf = L => L>=15?"Легенда":L>=10?"Силач":L>=6?"Атлет":L>=3?"Любитель":"Новичок";
@@ -337,7 +350,7 @@ const niceDate = k => DF.format(parseD(k)).replace(".","");
 const relDate = k => {const t=today(); if(k===t) return "Сегодня"; if(k===addDays(t,-1)) return "Вчера"; return niceDate(k)};
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function plural(n,a,b,c){n=Math.abs(n)%100;const n1=n%10;if(n>10&&n<20)return c;if(n1>1&&n1<5)return b;if(n1===1)return a;return c}
-function loadW(ex,s,bw){const e=EXM[ex];return e&&e.bw?(bw+(+s.w||0)):(+s.w||0)}
+function loadW(ex,s,bw){const e=EXM[ex], w=+s.w||0;return !e?w:e.bw?bw+w:e.assist?Math.max(0,bw-w):w}
 function announce(t){const el=$("#live");if(el){el.textContent="";setTimeout(()=>el.textContent=t,30)}}
 
 /* ---------- storage: private db subtree, falls back to this browser ---------- */
@@ -505,7 +518,7 @@ function derive(){
         const r=+s.r||0; if(r<=0) continue;
         const v = e1rm(loadW(ex.ex,s,bw),r);
         gained += XP.set; nSets++;
-        vol += (e.per?2:1)*(+s.w||0)*r + (e.bw?bw*r:0);
+        vol += e.assist?loadW(ex.ex,s,bw)*r:(e.per?2:1)*(+s.w||0)*r + (e.bw?bw*r:0);
         setsBy[e.g]=(setsBy[e.g]||0)+1;
         if(best[ex.ex]!=null && v>best[ex.ex]+0.01){gained+=XP.pr;prs++;prSets++;if(!wPR.includes(ex.ex))wPR.push(ex.ex)}
         if(best[ex.ex]==null||v>best[ex.ex]) best[ex.ex]=v;
@@ -873,10 +886,12 @@ function cap(s){return s[0].toUpperCase()+s.slice(1)}
 function suggestion(exId){
   const last=lastSetsFor(exId); if(!last) return null;
   const sets=last.sets.filter(s=>+s.r>0); if(!sets.length) return null;
-  const top=topSet(sets); const allHit = sets.every(s=>+s.r>=8);
+  const top=EXM[exId].assist?sets.reduce((a,s)=>(+s.w<+a.w?s:a),sets[0]):topSet(sets); const allHit = sets.every(s=>+s.r>=8);
   const e=EXM[exId]; const step = e.per||e.g==="arms"||(e.g==="shoulders"&&!e.plates)?1:(e.plates||e.z==="lf")?5:2.5;
   const when=cap(relDate(last.date));
-  if(allHit) return `${when}: ${fmtW(+top.w)} кг × ${top.r}. Все подходы на 8+ повторов, попробуй ${fmtW(+top.w+step)} кг × 6–8.`;
+  if(allHit) return e.assist
+    ? `${when}: противовес ${fmtW(+top.w)} кг × ${top.r}. Все подходы на 8+ повторов, попробуй ${fmtW(Math.max(0,+top.w-step))} кг × 6–8.`
+    : `${when}: ${fmtW(+top.w)} кг × ${top.r}. Все подходы на 8+ повторов, попробуй ${fmtW(+top.w+step)} кг × 6–8.`;
   return `${when}: ${fmtW(+top.w)} кг × ${top.r}. Останься на ${fmtW(+top.w)} кг и добери до 8 повторов в каждом подходе.`;
 }
 /* today's program day: the one picked on screen, else the next one after the log */
@@ -930,7 +945,7 @@ function exCard(ex,i){
       <button class="link" data-act="rm-ex" data-i="${i}" style="color:var(--faint)">Убрать</button></div>
     ${sug?`<div class="well sub" style="font-size:13px">${esc(sug)}</div>`:""}
     <div class="sets">
-      <span class="h"></span><span class="h">${e.bw?"Доп. вес, кг":e.plates?"Блины, кг":"Вес, кг"}</span><span class="h">Повторы</span><span></span>
+      <span class="h"></span><span class="h">${e.bw?"Доп. вес, кг":e.assist?"Противовес, кг":e.plates?"Блины, кг":"Вес, кг"}</span><span class="h">Повторы</span><span></span>
       ${ex.sets.map((s,j)=>{const isPR=prev!=null&&+s.r>0&&e1rm(loadW(ex.ex,s,D.bw),+s.r)>prev+0.01;
         return `<span class="n${isPR?" pr":""}" id="n-${i}-${j}">${isPR?"PR":j+1}</span>
         <input id="w-${i}-${j}" name="w-${i}-${j}" inputmode="decimal" autocomplete="off" value="${esc(s.w)}" data-set="${i}.${j}.w" aria-label="${esc(e.n)}: вес, подход ${j+1}">
@@ -1274,7 +1289,7 @@ document.addEventListener("input",ev=>{
 });
 
 window.ironLevelBackup={makeBackup,parseBackup};
-window.ironLevelInsights={groupRank,recovery,muscleFill};
+window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
 window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
 
 /* ---------- boot ---------- */

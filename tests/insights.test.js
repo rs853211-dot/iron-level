@@ -1,6 +1,6 @@
 // Browser tests for muscle ranks and recovery. Run on http://localhost:8000:
 //   (await import('/tests/insights.test.js?'+Date.now())).run()
-const {groupRank, recovery, muscleFill} = window.ironLevelInsights;
+const {groupRank, recovery, muscleFill, loadW, catalog} = window.ironLevelInsights;
 
 const S = o => JSON.stringify(o);
 const eq = (a, b) => S(a) === S(b);
@@ -22,6 +22,14 @@ const cases = {
   "rec-unknown-ex": () => { const r = recovery([wk("2026-10-22","gone")], "2026-10-22", gOf); return r.days === 0 && r.recovering.size === 0 && r.fresh === 6 || {...r, recovering:[...r.recovering]}; },
   "rec-month-boundary": () => recovery([wk("2026-09-30","bench")], "2026-10-01", gOf).days === 1,
   "fill-ends": () => muscleFill(0) === "#52524c" && muscleFill(1) === "#a8a89f" || [muscleFill(0), muscleFill(1)],
+  // catalog checked against the gym videos
+  "load-plain": () => loadW("bench", {w:"80"}, 80) === 80,
+  "load-bodyweight": () => loadW("pull", {w:"10"}, 80) === 90,
+  "load-assisted": () => loadW("as-pull", {w:"20"}, 80) === 60,
+  "load-assisted-clamps": () => loadW("as-dip", {w:"120"}, 80) === 0,
+  "catalog-new-ids": () => ["as-pull","as-dip","declbb","s360-kbs","s360-gob","s360-trx","s360-slam","sled"].every(id => catalog.some(e => e.id === id)) || catalog.map(e => e.id),
+  "catalog-ids-unique": () => new Set(catalog.map(e => e.id)).size === catalog.length,
+  "catalog-func-zone": () => catalog.filter(e => e.z === "func").length === 5,
   "fill-monotonic": () => { const l = x => parseInt(muscleFill(x).slice(1,3),16); return l(.2) < l(.5) && l(.5) < l(.8); },
 };
 
