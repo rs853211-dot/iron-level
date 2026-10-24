@@ -128,7 +128,9 @@ p{margin:0}
 .gm-screen{stroke:var(--chart-2);stroke-width:5;stroke-dasharray:2 5;stroke-linecap:round}
 .gm-fix{fill:var(--control)}
 .gm-t{fill:var(--muted);font:500 20px Inter,system-ui,sans-serif}
-.gm-spot{fill:transparent;stroke:transparent;stroke-width:3;cursor:pointer} .gm-spot.on{stroke:var(--text)}
+.gym-map.full .gm-t{font-size:30px}
+.gm-spot{fill:transparent;stroke:transparent;stroke-width:3;cursor:pointer}
+.gm-mark{fill:none;stroke-width:3;pointer-events:none} .gm-mark.on{stroke:var(--text)} .gm-mark.hot{stroke:var(--accent)}
 .gm-spot:focus-visible{outline:none;stroke:var(--text)}
 .intro-fig svg{display:block;height:220px;width:auto;margin:0 auto}
 .dots{display:flex;justify-content:center;gap:8px}
@@ -1009,13 +1011,15 @@ const GYM_MAP = {
   ["chin", line(2,493,370,535,370)],
   ["bic", [[626,307]]]
  ],
+ /* close-up labels; the whole floor gets three larger ones so nothing collides on a phone */
  labels:[["Дорожки",150,440,0],["Степперы",205,96,0],["Велосипеды",199,282,0],["Гребля",300,382,0],["Эскалатор",505,70,0],["Зал справа",770,455,0],["Перегородка",270,430,-11]],
+ labelsFull:[["Кардио",235,492,0],["Ресепшен",404,104,0],["Зал справа",770,455,0]],
  spots:[
-  {id:"racks",n:"Силовые стойки",x:834,y:164,w:58,h:148,ex:["squat","ohp","row","rdl","dead","hipthr"]},
-  {id:"flat",n:"Скамьи для жима лёжа",x:668,y:168,w:142,h:56,ex:["bench"]},
-  {id:"decl",n:"Скамья головой вниз",x:630,y:170,w:34,h:56,ex:["declbb"]},
-  {id:"incl",n:"Наклонная скамья",x:786,y:234,w:32,h:44,ex:["incbb","incdb"]},
-  {id:"db",n:"Гантели",x:640,y:258,w:190,h:54,ex:["incdb","dbsp","lat-r","hammer","dbrow","lunge"]},
+  {id:"racks",n:"Силовые стойки",x:836,y:169,w:56,h:138,ex:["squat","ohp","row","rdl","dead","hipthr"]},
+  {id:"flat",n:"Скамьи для жима лёжа",x:672,y:171,w:134,h:48,ex:["bench"]},
+  {id:"decl",n:"Скамья головой вниз",x:626,y:171,w:42,h:56,ex:["declbb"]},
+  {id:"incl",n:"Наклонная скамья",x:786,y:237,w:32,h:36,ex:["incbb","incdb"]},
+  {id:"db",n:"Гантели",x:641,y:262,w:185,h:49,ex:["incdb","dbsp","lat-r","hammer","dbrow","lunge"]},
   {id:"bic",n:"Бицепс-машина",x:612,y:293,w:28,h:28,ex:["lf-bic"]},
   {id:"chin",n:"Гравитроны Taurus",x:470,y:348,w:88,h:46,ex:["as-pull","as-dip","pull","dips"]},
   {id:"cab1",n:"Кабельный блок",x:584,y:326,w:32,h:100,ex:"cable"},
@@ -1024,16 +1028,17 @@ const GYM_MAP = {
 };
 /* top-down icons, drawn around 0,0: E body, L light detail, G dark detail */
 const GM_ICON = (()=>{
-  const E="var(--chart-off)", L="var(--chart-2)", G="var(--ground)", C="var(--control)";
+  const E="var(--chart-off)", L="var(--chart-2)", G="var(--ground)", C="var(--control)", Q="#3a3a38";
   const r=(x,y,w,h,f,rx)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(rx??2)+'" fill="'+f+'"/>';
   const l=(x1,y1,x2,y2,c,w)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+(w||2)+'" stroke-linecap="round"/>';
   const c=(x,y,rr,f)=>'<circle cx="'+x+'" cy="'+y+'" r="'+rr+'" fill="'+f+'"/>';
   const bench=pad=>pad+r(-11,-23,4,8,L,1)+r(7,-23,4,8,L,1)+l(-16,-19,16,-19,L,2.5)+r(-19,-24,3.5,10,L,1)+r(15.5,-24,3.5,10,L,1);
   return {
-   tread: r(-27,-13,54,26,E,5)+r(-15,-8,40,16,G,3)+r(-27,-13,9,26,L,3)+l(-17,-11,-5,-11,L)+l(-17,11,-5,11,L),
-   stair: r(-13,-11,26,22,E,4)+r(-13,-11,26,6,L,2)+l(-8,-1,8,-1,G)+l(-8,4,8,4,G)+l(-8,9,8,9,G),
-   bike:  '<ellipse cx="-9" cy="0" rx="5" ry="7.5" fill="'+L+'"/>'+l(-9,0,8,0,E,4)+l(-4,-8,-4,8,E,3)+'<ellipse cx="10" cy="0" rx="5" ry="4" fill="'+E+'"/>',
-   row:   r(-16,-2.5,44,5,L,2)+c(-21,0,8.5,E)+c(-21,0,3,G)+r(-12,-8,6,16,E,2)+r(7,-5.5,11,11,E,3),
+   /* cardio: nothing to log here, so it stays one step above the floor */
+   tread: r(-27,-13,54,26,C,5)+r(-15,-8,40,16,Q,3)+r(-27,-13,9,26,E,3),
+   stair: r(-13,-11,26,22,C,4)+r(-13,-11,26,6,E,2)+l(-8,-1,8,-1,Q)+l(-8,4,8,4,Q)+l(-8,9,8,9,Q),
+   bike:  '<ellipse cx="-9" cy="0" rx="5" ry="7.5" fill="'+E+'"/>'+l(-9,0,8,0,C,4)+l(-4,-8,-4,8,C,3)+'<ellipse cx="10" cy="0" rx="5" ry="4" fill="'+C+'"/>',
+   row:   r(-16,-2.5,44,5,E,2)+c(-21,0,8.5,C)+c(-21,0,3,Q)+r(-12,-8,6,16,C,2)+r(7,-5.5,11,11,C,3),
    bench: bench(r(-7,-13,14,34,E,4)),
    decl:  bench(r(-7,-13,14,30,E,4)+r(-9,19,18,5,E,2)),
    incl:  r(-7,-12,14,13,E,3)+r(-7,4,14,10,E,3)+r(-11,-17,4,7,L,1)+r(7,-17,4,7,L,1)+l(-18,-14,18,-14,L,2.5),
@@ -1046,20 +1051,27 @@ const GM_ICON = (()=>{
   };
 })();
 const spotEx = sp => (sp.ex==="cable"?ALL.filter(e=>e.z==="cable").map(e=>e.id):sp.ex).filter(id=>EXM[id]&&!isHidden(id));
+/* exercises of today: the program day on the workout screen, or what is already in the running workout */
+function todayEx(){
+  const a=S.active?S.active.exercises.map(e=>e.ex):[], pl=!S.active&&typeof planToday==="function"?planToday():null;
+  return new Set(a.concat(pl?pl.list.map(x=>x.ex):[]));
+}
 function gymMapSvg(sel,full){
+  const today=todayEx(), hot=sp=>spotEx(sp).some(id=>today.has(id));
   const M=GYM_MAP, pts=a=>a.map(p=>p.join(",")).join(" ");
   let s='<clipPath id="gm-c"><polygon points="'+pts(M.outline)+'"/></clipPath><polygon class="gm-floor" points="'+pts(M.outline)+'"/>';
   s+='<g clip-path="url(#gm-c)">'+M.routes.map(r=>'<polygon class="gm-route" points="'+pts(r)+'"/>').join("")+'</g>';
   s+=M.columns.map(([x,y])=>'<circle class="gm-col" cx="'+x+'" cy="'+y+'" r="6"/>').join("");
   s+='<polygon class="gm-wall" points="'+pts(M.outline)+'"/>'+M.walls.map(([a,b,c,d])=>'<line class="gm-wall" x1="'+a+'" y1="'+b+'" x2="'+c+'" y2="'+d+'"/>').join("");
   const [a,b,c,d]=M.screen; s+='<line class="gm-screen" x1="'+a+'" y1="'+b+'" x2="'+c+'" y2="'+d+'"/>';
-  s+=M.fixtures.map(([n,x,y,w,h])=>'<rect class="gm-fix" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6"/><text class="gm-t" text-anchor="middle" x="'+(x+w/2)+'" y="'+(y+h/2+5)+'">'+n+'</text>').join("");
+  s+=M.fixtures.map(([n,x,y,w,h])=>'<rect class="gm-fix" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6"/>'+(full?"":'<text class="gm-t" text-anchor="middle" x="'+(x+w/2)+'" y="'+(y+h/2+5)+'">'+n+'</text>')).join("");
   for(const [k,at] of M.equip) s+=at.map(([x,y])=>'<g transform="translate('+(+x.toFixed(1))+' '+(+y.toFixed(1))+')">'+GM_ICON[k]+'</g>').join("");
-  s+=M.labels.map(([t,x,y,r])=>'<text class="gm-t" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
+  s+=(full?M.labelsFull:M.labels).map(([t,x,y,r])=>'<text class="gm-t" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
   /* tap targets on top; the picked one gets a white outline */
   const hit=sp=>{const w=Math.max(60,sp.w),h=Math.max(60,sp.h);return [sp.x-(w-sp.w)/2,sp.y-(h-sp.h)/2,w,h]};
-  s+=M.spots.map(sp=>{const [x,y,w,h]=hit(sp);return '<rect class="gm-spot'+(sp.id===sel?' on':'')+'" data-spot="'+sp.id+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" role="button" tabindex="0" aria-label="'+sp.n+'"><title>'+sp.n+'</title></rect>'}).join("");
-  return '<svg class="gym-map" viewBox="'+(full?"0 0 900 740":"440 150 460 450")+'" role="img" aria-label="Карта зала">'+s+'</svg>';
+  s+=M.spots.filter(sp=>sp.id===sel||hot(sp)).map(sp=>'<rect class="gm-mark '+(sp.id===sel?'on':'hot')+'" x="'+(sp.x-3)+'" y="'+(sp.y-3)+'" width="'+(sp.w+6)+'" height="'+(sp.h+6)+'" rx="7"/>').join("");
+  s+=M.spots.map(sp=>{const [x,y,w,h]=hit(sp);return '<rect class="gm-spot" data-spot="'+sp.id+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" role="button" tabindex="0" aria-label="'+sp.n+'"><title>'+sp.n+'</title></rect>'}).join("");
+  return '<svg class="gym-map'+(full?' full':'')+'" viewBox="'+(full?"0 0 900 740":"440 150 460 450")+'" role="img" aria-label="Карта зала">'+s+'</svg>';
 }
 function viewMapSheet(){
   const sp=GYM_MAP.spots.find(x=>x.id===S.sheet.spot), ids=sp?spotEx(sp):[];
@@ -1069,6 +1081,7 @@ function viewMapSheet(){
     <div class="row between"><div><h2 id="map-h">Карта зала</h2><p class="meta">${esc(gymName())} · нажми на тренажёр</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
     <div class="seg" role="group" aria-label="Масштаб карты"><button data-act="map-zoom" aria-pressed="${!S.sheet.full}">Силовая зона</button><button data-act="map-full" aria-pressed="${!!S.sheet.full}">Весь зал</button></div>
     ${gymMapSvg(S.sheet.spot,S.sheet.full)}
+    ${GYM_MAP.spots.some(sp=>spotEx(sp).some(id=>todayEx().has(id)))?`<div class="key"><span><i style="background:var(--accent)"></i>${S.active?"Упражнения этой тренировки":"Упражнения сегодняшнего дня программы"}</span></div>`:""}
     ${sp?`<div class="well stack" style="gap:8px"><h3>${sp.n}</h3>${ids.length?`<div class="list">${ids.map(id=>{const e=EXM[id], l=lastSetsFor(id), top=l?topSet(l.sets):null;
       return `<button class="li" data-map-ex="${esc(id)}"><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span><span class="fig sub" aria-hidden="true">${S.active?"Добавить":"Начать"}</span></button>`}).join("")}</div>`
       :'<p class="sub">Все упражнения этого места скрыты в «Мой зал».</p>'}</div>`
@@ -1300,7 +1313,7 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.period){S.period=t.dataset.period;render();return}
   if(t.dataset.libg){S.sheet.g=t.dataset.libg;render();return}
   if(t.dataset.cg){const v=$("#c-name")?$("#c-name").value:"";S.sheet.cg=t.dataset.cg;render();const n=$("#c-name");if(n)n.value=v;return}
-  if(t.dataset.spot){S.sheet.spot=t.dataset.spot;render();return}
+  if(t.dataset.spot){S.sheet.spot=t.dataset.spot;S.sheet.full=false;render();return}
   if(t.dataset.mapEx&&!S.active){if(S.demo){S.demo=false;S.workouts=[];D=derive()} S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; S.pday=null; S.tab="workout"}
   if(t.dataset.addEx||t.dataset.mapEx){
     const id=t.dataset.addEx||t.dataset.mapEx; const last=lastSetsFor(id);
