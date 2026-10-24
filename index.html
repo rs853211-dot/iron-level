@@ -1073,14 +1073,87 @@ function gymMapSvg(sel,full){
   s+=M.spots.map(sp=>{const [x,y,w,h]=hit(sp);return '<rect class="gm-spot" data-spot="'+sp.id+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" role="button" tabindex="0" aria-label="'+sp.n+'"><title>'+sp.n+'</title></rect>'}).join("");
   return '<svg class="gym-map'+(full?' full':'')+'" viewBox="'+(full?"0 0 900 740":"440 150 460 450")+'" role="img" aria-label="Карта зала">'+s+'</svg>';
 }
+/* 2.5D view of the same map: the floor tilts away (y × 0.78), heights rise up the screen and lean a little to the
+   right, so the top and the left face of everything show. Depth by lightness only: each block has a light top,
+   a mid front and a dark left face, flat fills, no shadows. Painter's order: back rows first, right to left. */
+const ISO3D = {k:.78, lean:.3};
+const isoP = (x,y,z) => [x+ISO3D.lean*z, ISO3D.k*y-z];
+const isoPts = a => a.map(([x,y,z])=>isoP(x,y,z||0).map(v=>+v.toFixed(1)).join(",")).join(" ");
+const ISO_TONE = {
+  strength:["#8c8c88","#5e5e5b","#474745"], cardio:["#4f4f4c","#3e3e3c","#343432"],
+  fixture:["#4a4a47","#3a3a38","#303030"], light:["#d9d9d6","#a8a8a4","#8c8c88"],
+  wall:["#8f8f8b","#2f2f2d","#262624"], column:["#55554f","#3f3f3c","#353533"], dark:["#262624","#1c1c1b","#161615"]
+};
+/* one block: footprint x0,y0 → w,d, from z0 up h */
+function isoBox(x0,y0,w,d,h,tone,z0){
+  z0=z0||0; const [T,F,L]=ISO_TONE[tone]||tone, x1=x0+w, y1=y0+d, z1=z0+h;
+  return '<polygon fill="'+L+'" points="'+isoPts([[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]])+'"/>'
+    +'<polygon fill="'+F+'" points="'+isoPts([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]])+'"/>'
+    +'<polygon fill="'+T+'" points="'+isoPts([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]])+'"/>';
+}
+const isoLine = (a,b,c,w) => { const p=isoP(...a), q=isoP(...b); return '<line x1="'+p[0].toFixed(1)+'" y1="'+p[1].toFixed(1)+'" x2="'+q[0].toFixed(1)+'" y2="'+q[1].toFixed(1)+'" stroke="'+c+'" stroke-width="'+(w||3)+'" stroke-linecap="round"/>'; };
+/* machines as blocks around their centre cx,cy; returns [svg, footprint] */
+const ISO_KIND = {
+  tread:(x,y)=>isoBox(x-27,y-13,54,26,8,"cardio")+isoBox(x-27,y-13,8,26,34,"cardio"),
+  stair:(x,y)=>isoBox(x-13,y-11,26,22,30,"cardio"),
+  bike:(x,y)=>isoBox(x-13,y-5,26,10,20,"cardio"),
+  row:(x,y)=>isoBox(x-16,y-3,44,6,5,"cardio")+isoBox(x-28,y-7,14,14,14,"cardio"),
+  bench:(x,y)=>isoBox(x-7,y-13,14,34,12,"strength")+isoBox(x-11,y-22,3,3,26,"light")+isoBox(x+8,y-22,3,3,26,"light")+isoLine([x-17,y-21,26],[x+17,y-21,26],"#d9d9d6",3),
+  decl:(x,y)=>isoBox(x-7,y-13,14,30,12,"strength")+isoBox(x-9,y+18,18,5,8,"strength")+isoBox(x-11,y-22,3,3,26,"light")+isoBox(x+8,y-22,3,3,26,"light")+isoLine([x-17,y-21,26],[x+17,y-21,26],"#d9d9d6",3),
+  incl:(x,y)=>isoBox(x-7,y+2,14,13,12,"strength")+isoBox(x-7,y-13,14,14,24,"strength")+isoLine([x-15,y-16,30],[x+15,y-16,30],"#d9d9d6",3),
+  rack:(x,y)=>'<polygon fill="var(--control)" points="'+isoPts([[x-22,y-20,0],[x+22,y-20,0],[x+22,y+20,0],[x-22,y+20,0]])+'"/>'
+    +isoBox(x-22,y-20,4,4,60,"light")+isoBox(x+18,y-20,4,4,60,"light")+isoLine([x-28,y,40],[x+28,y,40],"#d9d9d6",3.5)
+    +isoBox(x-22,y+16,4,4,60,"light")+isoBox(x+18,y+16,4,4,60,"light"),
+  dbrack:()=>isoBox(643,264,14,50,18,"light")+isoBox(657,295,167,14,18,"light")
+    +Array.from({length:13},(_,i)=>isoBox(664+i*12.5,297,7,10,6,"dark",18)).join(""),
+  cable:(x,y)=>isoBox(x-12,y-48,24,18,72,"strength")+isoBox(x-12,y+30,24,18,72,"strength")+isoBox(x-3,y-30,6,60,6,"strength")+isoLine([x,y-39,72],[x,y+39,72],"#d9d9d6",2),
+  chin:(x,y)=>isoBox(x-15,y-4,30,21,10,"strength")+isoBox(x-12,y-17,24,9,58,"strength")+isoLine([x-16,y-6,58],[x+16,y-6,58],"#d9d9d6",3),
+  bic:(x,y)=>isoBox(x-11,y-11,22,22,28,"strength")
+};
+/* outer walls: the far ones stand tall, the near ones are cut down to a kerb so the floor stays visible */
+function isoWalls(outline){
+  const inside=(px,py)=>{let c=false;for(let i=0,j=outline.length-1;i<outline.length;j=i++){const [xi,yi]=outline[i],[xj,yj]=outline[j];
+    if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)c=!c}return c};
+  return outline.map((p,i)=>{const q=outline[(i+1)%outline.length], dx=q[0]-p[0], dy=q[1]-p[1], L=Math.hypot(dx,dy)||1;
+    let nx=dy/L, ny=-dx/L; const mx=(p[0]+q[0])/2, my=(p[1]+q[1])/2; if(inside(mx+nx*4,my+ny*4)){nx=-nx;ny=-ny}
+    const h=ny<-.3?44:8;
+    return {y:Math.max(p[1],q[1])-(h>8?999:0), x:Math.max(p[0],q[0]),
+      svg:'<polygon fill="'+(ny<-.3?ISO_TONE.wall[1]:ISO_TONE.wall[2])+'" points="'+isoPts([[...p,0],[...q,0],[...q,h],[...p,h]])+'"/>'+isoLine([...p,h],[...q,h],ISO_TONE.wall[0],3)};
+  });
+}
+function gymMapIso(sel,full){
+  const M=GYM_MAP, today=todayEx(), hot=sp=>spotEx(sp).some(id=>today.has(id));
+  const fl=a=>a.map(([x,y])=>[x,y,0]);
+  let s='<polygon fill="var(--raised)" points="'+isoPts(fl(M.outline))+'"/>';
+  s+='<clipPath id="gm-ci"><polygon points="'+isoPts(fl(M.outline))+'"/></clipPath><g clip-path="url(#gm-ci)">'+M.routes.map(r=>'<polygon class="gm-route" points="'+isoPts(fl(r))+'"/>').join("")+'</g>';
+  /* marks lie on the floor around the machine */
+  s+=M.spots.filter(sp=>sp.id===sel||hot(sp)).map(sp=>'<polygon class="gm-mark '+(sp.id===sel?'on':'hot')+'" points="'+isoPts([[sp.x-4,sp.y-4,0],[sp.x+sp.w+4,sp.y-4,0],[sp.x+sp.w+4,sp.y+sp.h+4,0],[sp.x-4,sp.y+sp.h+4,0]])+'"/>').join("");
+  const items=[...isoWalls(M.outline)];
+  for(const [a,b,c,d] of M.walls){const back=Math.abs(b-d)<4; items.push({y:Math.max(b,d)-(back?0:0),x:Math.max(a,c),
+    svg:'<polygon fill="'+ISO_TONE.wall[back?1:2]+'" points="'+isoPts([[a,b,0],[c,d,0],[c,d,30],[a,b,30]])+'"/>'+isoLine([a,b,30],[c,d,30],ISO_TONE.wall[0],3)})}
+  for(const [x,y] of M.columns) items.push({y:y+5,x,svg:isoBox(x-5,y-5,10,10,34,"column")});
+  for(const [n,x,y,w,h] of M.fixtures) items.push({y:y+h,x:x+w,svg:isoBox(x,y,w,h,n==="Автоматы"?50:30,"fixture")});
+  const [a,b,c,d]=M.screen; for(let i=0;i<=14;i++){const x=a+(c-a)*i/14, y=b+(d-b)*i/14; items.push({y:y+1.5,x,svg:isoBox(x-1.5,y-1.5,3,3,38,"light")})}
+  for(const [k,at] of M.equip) for(const [x,y] of at) items.push({y:k==="dbrack"?309:y+(k==="cable"?48:k==="bench"||k==="decl"?21:20),x:k==="dbrack"?824:x,svg:ISO_KIND[k](x,y)});
+  items.sort((p,q)=>p.y-q.y||q.x-p.x);
+  s+=items.map(i=>i.svg).join("");
+  const lab=M.labelsFull;
+  s+=lab.map(([t,x,y])=>{const [px,py]=isoP(x,y,0);return '<text class="gm-t" text-anchor="middle" x="'+px.toFixed(1)+'" y="'+py.toFixed(1)+'">'+t+'</text>'}).join("");
+  /* tap areas cover the block and its height */
+  s+=M.spots.map(sp=>{const [x0,y0]=isoP(sp.x,sp.y,64), [x1,y1]=isoP(sp.x+sp.w,sp.y+sp.h,0), w=Math.max(60,x1-x0+19), h=Math.max(60,y1-y0);
+    return '<rect class="gm-spot" data-spot="'+sp.id+'" x="'+(x0-19-(w-(x1-x0+19))/2).toFixed(1)+'" y="'+(y0-(h-(y1-y0))/2).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="8" role="button" tabindex="0" aria-label="'+sp.n+'"><title>'+sp.n+'</title></rect>'}).join("");
+  const vb=full?[-10,-62,940,632]:[430,40,480,432];
+  return '<svg class="gym-map'+(full?' full':'')+'" viewBox="'+vb.join(" ")+'" role="img" aria-label="Карта зала в объёме">'+s+'</svg>';
+}
 function viewMapSheet(){
   const sp=GYM_MAP.spots.find(x=>x.id===S.sheet.spot), ids=sp?spotEx(sp):[];
   const placed=new Set(GYM_MAP.spots.flatMap(x=>x.ex==="cable"?["cable"]:x.ex.map(id=>EXM[id]&&EXM[id].z)));
   const missing=["hs","lf","func"].filter(z=>!placed.has(z)||z==="lf").map(z=>ZONES[z].split(" · ")[0]);
   return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="map-h" data-stop>
     <div class="row between"><div><h2 id="map-h">Карта зала</h2><p class="meta">${esc(gymName())} · нажми на тренажёр</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
-    <div class="seg" role="group" aria-label="Масштаб карты"><button data-act="map-zoom" aria-pressed="${!S.sheet.full}">Силовая зона</button><button data-act="map-full" aria-pressed="${!!S.sheet.full}">Весь зал</button></div>
-    ${gymMapSvg(S.sheet.spot,S.sheet.full)}
+    <div class="row" style="gap:8px"><div class="seg" role="group" aria-label="Масштаб карты" style="flex:1"><button data-act="map-zoom" aria-pressed="${!S.sheet.full}">Силовая зона</button><button data-act="map-full" aria-pressed="${!!S.sheet.full}">Весь зал</button></div>
+      <div class="seg" role="group" aria-label="Вид карты"><button data-act="map-3d" aria-pressed="${!!S.sheet.iso}" style="padding:0 16px">3D</button></div></div>
+    ${(S.sheet.iso?gymMapIso:gymMapSvg)(S.sheet.spot,S.sheet.full)}
     ${GYM_MAP.spots.some(sp=>spotEx(sp).some(id=>todayEx().has(id)))?`<div class="key"><span><i style="background:var(--accent)"></i>${S.active?"Упражнения этой тренировки":"Упражнения сегодняшнего дня программы"}</span></div>`:""}
     ${sp?`<div class="well stack" style="gap:8px"><h3>${sp.n}</h3>${ids.length?`<div class="list">${ids.map(id=>{const e=EXM[id], l=lastSetsFor(id), top=l?topSet(l.sets):null;
       return `<button class="li" data-map-ex="${esc(id)}"><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span><span class="fig sub" aria-hidden="true">${S.active?"Добавить":"Начать"}</span></button>`}).join("")}</div>`
@@ -1348,6 +1421,7 @@ document.addEventListener("click",async ev=>{
     case "open-map": S.sheet={mode:"map",spot:null,full:false}; render(); break;
     case "map-zoom": S.sheet.full=false; render(); break;
     case "map-full": S.sheet.full=true; render(); break;
+    case "map-3d": S.sheet.iso=!S.sheet.iso; render(); break;
     case "close-sheet": S.sheet=null; render(); break;
     case "add-set":{const ex=S.active.exercises[+t.dataset.i];const last=ex.sets[ex.sets.length-1]||{w:"",r:""};ex.sets.push({w:last.w,r:last.r});draft.set(S.active);render();break}
     case "rm-set":{const ex=S.active.exercises[+t.dataset.i];ex.sets.splice(+t.dataset.j,1);if(!ex.sets.length)S.active.exercises.splice(+t.dataset.i,1);draft.set(S.active);render();break}
