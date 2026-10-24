@@ -122,6 +122,15 @@ p{margin:0}
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);align-items:center}
 .hero svg{width:100%;height:auto;max-height:320px;display:block}
 .fig-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.gym-map{width:100%;height:auto;display:block;border-radius:16px;background:var(--ground)}
+.gm-floor{fill:var(--raised)} .gm-route{fill:#3f5a43} .gm-col{fill:var(--ground)}
+.gm-wall{fill:none;stroke:var(--muted);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.gm-screen{stroke:var(--chart-2);stroke-width:5;stroke-dasharray:2 5;stroke-linecap:round}
+.gm-fix{fill:var(--control)} .gm-eq{fill:var(--chart-off)} .gm-light{fill:var(--chart-2)}
+.gm-rack{fill:none;stroke:var(--chart-2);stroke-width:2.5} .gm-bar{stroke:var(--chart-2);stroke-width:3;stroke-linecap:round}
+.gm-t{fill:var(--muted);font:500 20px Inter,system-ui,sans-serif}
+.gm-spot{fill:transparent;stroke:transparent;stroke-width:3;cursor:pointer} .gm-spot.on{stroke:var(--text)}
+.gm-spot:focus-visible{outline:none;stroke:var(--text)}
 .intro-fig svg{display:block;height:220px;width:auto;margin:0 auto}
 .dots{display:flex;justify-content:center;gap:8px}
 .dots i{width:7px;height:7px;border-radius:50%;background:var(--control)}
@@ -757,7 +766,7 @@ const INTRO = [
  {t:"Ранги и отдых",p:"У каждой группы мышц свой ранг по силе. Группе, которую ты качал сегодня или вчера, лучше дать отдохнуть.",
   rows:[["Бронза → Элита","пять рангов, сила от 0 до 100"],["Отдыхает","группу качали сегодня или вчера"],["Перерыв","дней с прошлой тренировки"],["Серия","недели подряд с двумя и больше тренировками"]]},
  {t:"Твой зал и данные",p:"Записи хранятся только на этом телефоне. Время от времени сохраняй копию в файл.",
-  rows:[["Мой зал","убери тренажёры, которых нет, и добавь свои"],["Сохранить в файл","резервная копия в «Файлы» или iCloud"],["Загрузить из файла","перенос на новый телефон"],["ИИ-тренер","разбор тренировок, когда приложение открыто в Claude"]]}
+  rows:[["Карта зала","на вкладке «Тренировка»: нажми на стойку или тренажёр и начни упражнение"],["Мой зал","убери тренажёры, которых нет, и добавь свои"],["Сохранить в файл","резервная копия в «Файлы» или iCloud"],["Загрузить из файла","перенос на новый телефон"],["ИИ-тренер","разбор тренировок, когда приложение открыто в Claude"]]}
 ];
 function viewIntro(){
   const i=S.intro, sl=INTRO[i], last=i===INTRO.length-1;
@@ -923,6 +932,7 @@ function viewWorkout(){
         </div>
       </div>
       ${pl?'<button class="btn block" data-act="start">Пустая тренировка</button>':'<button class="btn primary block" data-act="start">Начать тренировку</button><button class="link" data-tab="profile" style="align-self:center">Выбрать программу</button>'}
+      <button class="btn block" data-act="open-map">Карта зала</button>
       ${D.ws.length?`<div class="card"><div class="row between"><h2>Последние</h2><button class="link" data-tab="progress">Вся история</button></div><div class="list">${D.ws.slice(-4).reverse().map(w=>histRow(w,false)).join("")}</div></div>`:""}
     </div>`;
   const nSets=a.exercises.reduce((s,e)=>s+e.sets.filter(x=>+x.r>0).length,0);
@@ -930,7 +940,7 @@ function viewWorkout(){
     <div class="titlerow"><div class="grow"><h1>Тренировка</h1><p class="sub" style="font-size:13px">${relDate(a.date)} · ${esc(gymName())} · идёт запись</p></div><span class="num" style="font-weight:600" id="xp-now">+${nSets*XP.set} XP</span></div>
     ${a.exercises.length?"":`<div class="card"><p class="sub">Добавь первое упражнение: подскажу вес по прошлому разу.</p></div>`}
     ${a.exercises.map((ex,i)=>exCard(ex,i)).join("")}
-    <button class="btn block" data-act="open-lib">Добавить упражнение</button>
+    <div class="grid2"><button class="btn" data-act="open-lib">Добавить упражнение</button><button class="btn" data-act="open-map">Карта зала</button></div>
     <div class="grid2">
       <button class="btn ${S.confirm==="cancel"?"danger":"ghost"}" data-act="${S.confirm==="cancel"?"cancel-yes":"cancel"}">${S.confirm==="cancel"?"Удалить запись":"Отменить"}</button>
       <button class="btn primary" data-act="finish" ${nSets?"":"disabled"}>Завершить</button>
@@ -957,6 +967,7 @@ function exCard(ex,i){
 }
 function viewSheet(){
   if(S.sheet.mode==="gym") return viewGymSheet();
+  if(S.sheet.mode==="map") return viewMapSheet();
   const q=(S.sheet.q||"").toLowerCase(), gsel=S.sheet.g||"all";
   const items=ALL.filter(e=>!isHidden(e.id)&&(gsel==="all"||e.g===gsel));
   const zones=ZONE_ORDER.filter(z=>items.some(e=>e.z===z));
@@ -970,6 +981,71 @@ function viewSheet(){
       <span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span>
       <span class="fig sub" aria-hidden="true">Добавить</span></button>`}).join("")}</div></section>`).join("")}
     <button class="link" data-act="open-gym" style="align-self:flex-start">Нет нужного тренажёра? Настроить мой зал</button>
+  </div></div>`;
+}
+/* ---------- gym map: Crunch Fit Lichtenberg, 1st floor, traced from the escape plan and marked by the owner ----------
+   Coordinates are the map's own (viewBox 900×720). Spots are what can be tapped; each lists exercises from EX.
+   The green escape routes are the one colour besides the data yellow: they are how the gym itself marks its aisles. */
+const GYM_MAP = {
+ outline:[[22,35],[157,20],[195,38],[355,26],[450,26],[450,98],[550,98],[550,167],[460,167],[460,215],[580,215],[595,195],[595,162],[892,162],[892,585],[648,585],[648,710],[615,720],[530,570],[310,615],[315,680],[270,685],[235,538],[135,555]],
+ routes:[[[30,50],[95,50],[180,415],[138,420]],[[325,105],[550,105],[550,132],[370,132],[415,435],[645,435],[645,470],[422,470],[530,720],[490,730],[382,470],[325,132]]],
+ columns:[[170,280],[198,415],[315,250],[508,250],[775,248],[343,387],[510,385],[373,522],[513,519],[776,380],[778,513]],
+ walls:[[645,313,892,310],[645,313,645,435],[645,470,648,585]],
+ screen:[198,415,343,387],
+ fixtures:[["Ресепшен",365,26,79,48],["Автоматы",196,101,128,26],["Вода",266,32,62,26]],
+ cardio:[{w:50,h:30,a:-12,at:[[58,58],[79,126],[94,176],[102,233],[112,289],[126,344],[137,394]]},
+   {w:26,h:18,a:0,at:[[134,52],[139,79],[140,104],[145,130]]},
+   {w:20,h:14,a:0,at:[[153,171],[156,199],[166,224],[174,249],[233,166],[233,193],[235,216],[241,241]]},
+   {w:52,h:20,a:0,at:[[291,162],[293,193],[293,225],[296,282],[305,311],[317,352]]}],
+ labels:[["Дорожки",150,440,0],["Степперы",172,40,0],["Велосипеды",193,276,0],["Гребля",300,378,0],["Эскалатор",462,70,0],["Зал справа",770,455,0],["Перегородка",270,430,-11]],
+ spots:[
+  {id:"racks",n:"Силовые стойки",x:834,y:164,w:58,h:148,ex:["squat","ohp","row","rdl","dead","hipthr"]},
+  {id:"flat",n:"Скамьи для жима лёжа",x:674,y:168,w:126,h:56,ex:["bench"]},
+  {id:"decl",n:"Скамья головой вниз",x:630,y:170,w:34,h:56,ex:["declbb"]},
+  {id:"incl",n:"Наклонная скамья",x:786,y:234,w:32,h:42,ex:["incbb","incdb"]},
+  {id:"db",n:"Гантели",x:640,y:258,w:190,h:54,ex:["incdb","dbsp","lat-r","hammer","dbrow","lunge"]},
+  {id:"bic",n:"Бицепс-машина",x:610,y:291,w:30,h:30,ex:["lf-bic"]},
+  {id:"chin",n:"Гравитроны Taurus",x:472,y:344,w:84,h:48,ex:["as-pull","as-dip","pull","dips"]},
+  {id:"cab1",n:"Кабельный блок",x:572,y:323,w:36,h:106,ex:"cable"},
+  {id:"cab2",n:"Кабельный блок",x:585,y:468,w:40,h:115,ex:"cable"}
+ ]
+};
+const spotEx = sp => (sp.ex==="cable"?ALL.filter(e=>e.z==="cable").map(e=>e.id):sp.ex).filter(id=>EXM[id]&&!isHidden(id));
+function gymMapSvg(sel,full){
+  const M=GYM_MAP, pts=a=>a.map(p=>p.join(",")).join(" ");
+  let s='<clipPath id="gm-c"><polygon points="'+pts(M.outline)+'"/></clipPath><polygon class="gm-floor" points="'+pts(M.outline)+'"/>';
+  s+='<g clip-path="url(#gm-c)">'+M.routes.map(r=>'<polygon class="gm-route" points="'+pts(r)+'"/>').join("")+'</g>';
+  s+=M.columns.map(([x,y])=>'<circle class="gm-col" cx="'+x+'" cy="'+y+'" r="6"/>').join("");
+  s+='<polygon class="gm-wall" points="'+pts(M.outline)+'"/>'+M.walls.map(([a,b,c,d])=>'<line class="gm-wall" x1="'+a+'" y1="'+b+'" x2="'+c+'" y2="'+d+'"/>').join("");
+  const [a,b,c,d]=M.screen; s+='<line class="gm-screen" x1="'+a+'" y1="'+b+'" x2="'+c+'" y2="'+d+'"/>';
+  s+=M.fixtures.map(([n,x,y,w,h])=>'<rect class="gm-fix" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6"/><text class="gm-t" text-anchor="middle" x="'+(x+w/2)+'" y="'+(y+h/2+5)+'">'+n+'</text>').join("");
+  for(const c of M.cardio) s+=c.at.map(([x,y])=>'<rect class="gm-eq" x="'+(x-c.w/2)+'" y="'+(y-c.h/2)+'" width="'+c.w+'" height="'+c.h+'" rx="4" transform="rotate('+c.a+' '+x+' '+y+')"/>').join("");
+  /* free-weight corner and machines */
+  s+=[[639,179,16,41],[681,176,16,39],[732,175,16,42],[777,177,17,41],[795,242,14,26]].map(([x,y,w,h])=>'<rect class="gm-eq" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3"/><line class="gm-bar" x1="'+(x-7)+'" y1="'+(y+5)+'" x2="'+(x+w+7)+'" y2="'+(y+5)+'"/>').join("");
+  for(let i=0;i<3;i++){const y=170+i*47; s+='<rect class="gm-rack" x="842" y="'+y+'" width="44" height="41" rx="3"/><line class="gm-bar" x1="836" y1="'+(y+20)+'" x2="892" y2="'+(y+20)+'"/>';}
+  s+='<rect class="gm-light" x="643" y="264" width="14" height="50" rx="3"/><rect class="gm-light" x="657" y="295" width="167" height="14" rx="3"/>';
+  s+=[[578,329,24,94],[591,474,28,103]].map(([x,y,w,h])=>'<rect class="gm-eq" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3"/><line class="gm-bar" x1="'+(x+w/2)+'" y1="'+(y+8)+'" x2="'+(x+w/2)+'" y2="'+(y+h-8)+'"/>').join("");
+  s+=[[478,354,30,33],[520,350,29,34]].map(([x,y,w,h])=>'<rect class="gm-eq" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="3"/><line class="gm-bar" x1="'+(x+4)+'" y1="'+(y+6)+'" x2="'+(x+w-4)+'" y2="'+(y+6)+'"/>').join("");
+  s+='<rect class="gm-eq" x="616" y="297" width="20" height="20" rx="3"/>';
+  s+=M.labels.map(([t,x,y,r])=>'<text class="gm-t" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
+  /* tap targets on top; the picked one gets a white outline */
+  const hit=sp=>{const w=Math.max(60,sp.w),h=Math.max(60,sp.h);return [sp.x-(w-sp.w)/2,sp.y-(h-sp.h)/2,w,h]};
+  s+=M.spots.map(sp=>{const [x,y,w,h]=hit(sp);return '<rect class="gm-spot'+(sp.id===sel?' on':'')+'" data-spot="'+sp.id+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="8" role="button" tabindex="0" aria-label="'+sp.n+'"><title>'+sp.n+'</title></rect>'}).join("");
+  return '<svg class="gym-map" viewBox="'+(full?"0 0 900 740":"440 150 460 450")+'" role="img" aria-label="Карта зала">'+s+'</svg>';
+}
+function viewMapSheet(){
+  const sp=GYM_MAP.spots.find(x=>x.id===S.sheet.spot), ids=sp?spotEx(sp):[];
+  const placed=new Set(GYM_MAP.spots.flatMap(x=>x.ex==="cable"?["cable"]:x.ex.map(id=>EXM[id]&&EXM[id].z)));
+  const missing=["hs","lf","func"].filter(z=>!placed.has(z)||z==="lf").map(z=>ZONES[z].split(" · ")[0]);
+  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="map-h" data-stop>
+    <div class="row between"><div><h2 id="map-h">Карта зала</h2><p class="meta">${esc(gymName())} · нажми на тренажёр</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
+    <div class="seg" role="group" aria-label="Масштаб карты"><button data-act="map-zoom" aria-pressed="${!S.sheet.full}">Силовая зона</button><button data-act="map-full" aria-pressed="${!!S.sheet.full}">Весь зал</button></div>
+    ${gymMapSvg(S.sheet.spot,S.sheet.full)}
+    ${sp?`<div class="well stack" style="gap:8px"><h3>${sp.n}</h3>${ids.length?`<div class="list">${ids.map(id=>{const e=EXM[id], l=lastSetsFor(id), top=l?topSet(l.sets):null;
+      return `<button class="li" data-map-ex="${esc(id)}"><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span><span class="fig sub" aria-hidden="true">${S.active?"Добавить":"Начать"}</span></button>`}).join("")}</div>`
+      :'<p class="sub">Все упражнения этого места скрыты в «Мой зал».</p>'}</div>`
+     :'<p class="sub" style="font-size:13px">Нажми на стойку, скамью, гантели или тренажёр, чтобы добавить упражнение в тренировку.</p>'}
+    <p class="meta">Ещё не на карте: ${missing.join(", ")}. Их упражнения есть в списке.</p>
   </div></div>`;
 }
 function gymName(){return (S.profile&&S.profile.gym)||"Crunch Fit Lichtenberg"}
@@ -1184,7 +1260,7 @@ ${recent}
 
 /* ---------- events ---------- */
 document.addEventListener("click",async ev=>{
-  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex],[data-prog],[data-pday],[data-figview]");
+  const t=ev.target.closest("[data-act],[data-tab],[data-add-ex],[data-libg],[data-cg],[data-period],[data-onb-sex],[data-psex],[data-prog],[data-pday],[data-figview],[data-spot],[data-map-ex]");
   if(!t) return;
   if(t.dataset.act==="close-sheet" && t.classList.contains("sheet-bg") && ev.target.closest("[data-stop]")) return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.summary=null;S.confirm=null;S.sheet=null;render();window.scrollTo(0,0);return}
@@ -1196,10 +1272,12 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.period){S.period=t.dataset.period;render();return}
   if(t.dataset.libg){S.sheet.g=t.dataset.libg;render();return}
   if(t.dataset.cg){const v=$("#c-name")?$("#c-name").value:"";S.sheet.cg=t.dataset.cg;render();const n=$("#c-name");if(n)n.value=v;return}
-  if(t.dataset.addEx){
-    const id=t.dataset.addEx; const last=lastSetsFor(id);
+  if(t.dataset.spot){S.sheet.spot=t.dataset.spot;render();return}
+  if(t.dataset.mapEx&&!S.active){if(S.demo){S.demo=false;S.workouts=[];D=derive()} S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; S.pday=null; S.tab="workout"}
+  if(t.dataset.addEx||t.dataset.mapEx){
+    const id=t.dataset.addEx||t.dataset.mapEx; const last=lastSetsFor(id);
     const sets = last? last.sets.map(s=>({w:s.w,r:""})) : [{w:"",r:""}];
-    S.active.exercises.push({ex:id,sets}); S.sheet=null; draft.set(S.active); render();
+    S.active.exercises.push({ex:id,sets}); S.sheet=null; S.tab="workout"; draft.set(S.active); render();
     const i=S.active.exercises.length-1; const el=document.getElementById("w-"+i+"-0"); if(el) el.scrollIntoView({block:"center"});
     announce(EXM[id].n+": добавлено");
     return;
@@ -1226,6 +1304,9 @@ document.addEventListener("click",async ev=>{
     case "intro-open": S.intro=0; render(); window.scrollTo(0,0); break;
     case "go-workout": S.tab="workout"; render(); break;
     case "open-lib": S.sheet={g:"all",q:""}; render(); break;
+    case "open-map": S.sheet={mode:"map",spot:null,full:false}; render(); break;
+    case "map-zoom": S.sheet.full=false; render(); break;
+    case "map-full": S.sheet.full=true; render(); break;
     case "close-sheet": S.sheet=null; render(); break;
     case "add-set":{const ex=S.active.exercises[+t.dataset.i];const last=ex.sets[ex.sets.length-1]||{w:"",r:""};ex.sets.push({w:last.w,r:last.r});draft.set(S.active);render();break}
     case "rm-set":{const ex=S.active.exercises[+t.dataset.i];ex.sets.splice(+t.dataset.j,1);if(!ex.sets.length)S.active.exercises.splice(+t.dataset.i,1);draft.set(S.active);render();break}
@@ -1269,7 +1350,8 @@ document.addEventListener("change",async ev=>{
   S.profile.hidden=[...h]; await store.saveProfile(S.profile);
   const m=document.querySelector("#gym-h + .meta"); if(m) m.textContent=gymName()+" · "+ALL.filter(e=>!isHidden(e.id)).length+" из "+ALL.length+" тренажёров и упражнений";
 });
-document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&S.sheet){S.sheet=null;render()} });
+document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&S.sheet){S.sheet=null;render()}
+  if((ev.key==="Enter"||ev.key===" ")&&ev.target.dataset&&ev.target.dataset.spot){ev.preventDefault();ev.target.dispatchEvent(new MouseEvent("click",{bubbles:true}))} });
 function readOnb(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};return Object.assign({},S.onb||{},{name:g("o-name"),bw:g("o-bw"),height:g("o-h"),age:g("o-age")})}
 function readProfileInputs(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};
   const bw=parseFloat(String(g("p-bw")).replace(",","."));
@@ -1289,6 +1371,7 @@ document.addEventListener("input",ev=>{
 });
 
 window.ironLevelBackup={makeBackup,parseBackup};
+window.ironLevelMap={spots:GYM_MAP.spots.map(x=>({id:x.id,ex:x.ex}))};
 window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
 window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
 

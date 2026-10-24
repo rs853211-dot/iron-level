@@ -30,6 +30,7 @@ const cases = {
   "catalog-new-ids": () => ["as-pull","as-dip","declbb","s360-kbs","s360-gob","s360-trx","s360-slam","sled"].every(id => catalog.some(e => e.id === id)) || catalog.map(e => e.id),
   "catalog-ids-unique": () => new Set(catalog.map(e => e.id)).size === catalog.length,
   "catalog-func-zone": () => catalog.filter(e => e.z === "func").length === 5,
+  "map-spots-known-ids": () => { const bad = window.ironLevelMap.spots.flatMap(s => s.ex === "cable" ? [] : s.ex).filter(id => !catalog.some(e => e.id === id)); return bad.length === 0 || bad; },
   "fill-monotonic": () => { const l = x => parseInt(muscleFill(x).slice(1,3),16); return l(.2) < l(.5) && l(.5) < l(.8); },
 };
 
