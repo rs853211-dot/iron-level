@@ -132,6 +132,7 @@ p{margin:0}
 .gm-spot{fill:transparent;stroke:transparent;stroke-width:3;cursor:pointer}
 .gm-mark{fill:none;stroke-width:3;pointer-events:none} .gm-mark.on{stroke:var(--text)} .gm-mark.hot{stroke:var(--accent)}
 .gm-spot:focus-visible{outline:none;stroke:var(--text)}
+.gm-spot.down{stroke:var(--text);fill:rgba(255,255,255,.08)}
 .mapfull{position:fixed;inset:0;z-index:45;background:var(--ground);padding-top:env(safe-area-inset-top,0px)}
 .mapfull-in{max-width:480px;height:100%;margin:0 auto;display:flex;flex-direction:column}
 .mapfull-top{padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
@@ -145,6 +146,7 @@ p{margin:0}
 .models img{display:block;width:100%;height:auto;aspect-ratio:1;border-radius:8px;background:#fff}
 .models span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .gm-photo{width:56px;height:56px;border-radius:10px;flex:none;background:#fff}
+.gm-n{fill:var(--chart-2);font-family:Inter,system-ui,sans-serif;font-weight:500;pointer-events:none}
 .gym-map.edit{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 .gym-map.edit .gm-m{cursor:move} .gym-map.edit text{pointer-events:none}
 .stepper{display:flex;gap:6px;align-items:center}
@@ -1039,20 +1041,21 @@ const GM_KIND = {
   row:{n:"Гребной тренажёр",b:[29,9],idle:true}
 };
 /* machines of this gym by model, from the owner's photos in Geräte/ (cut to 320px thumbnails in machines/<id>.webp).
-   Picking a model in the editor sets the machine's icon k, name n and exercises ex; the map card shows the photo. */
+   Picking a model in the editor sets the machine's kind k, name n and exercises ex; icon is its own top-down drawing in
+   GM_ICON, so a row of selectorized machines can be told apart; the map card shows the photo. */
 const GYM_MODELS = [
-  {id:"ins-chest",n:"Insignia Chest Press",k:"mach",ex:["lf-chest"]},
-  {id:"ins-fly",n:"Insignia Pectoral Fly / Rear Deltoid",k:"mach",ex:["lf-fly"]},
-  {id:"ins-shp",n:"Insignia Shoulder Press",k:"mach",ex:["lf-shp"]},
-  {id:"ins-row",n:"Insignia Row",k:"mach",ex:["lf-row"]},
-  {id:"ins-legp",n:"Insignia Arc Leg Press",k:"mach",ex:["lf-legp"]},
-  {id:"ins-scurl",n:"Insignia Seated Leg Curl",k:"mach",ex:["lf-scurl"]},
-  {id:"ins-pcurl",n:"Insignia Leg Curl",k:"mach",ex:["lf-pcurl"]},
-  {id:"ins-bic",n:"Insignia Biceps Curl",k:"bic",ex:["lf-bic"]},
-  {id:"ins-bic-dep",n:"Insignia Biceps Curl (Dependent)",k:"bic",ex:["lf-bic"]},
-  {id:"ins-tri",n:"Insignia Triceps Extension",k:"mach",ex:["lf-tri"]},
-  {id:"ins-tpress",n:"Triceps Press",k:"mach",ex:["lf-tpress"]},
-  {id:"ins-abd",n:"Insignia Abdominal",k:"mach",ex:["lf-abdc"]}
+  {id:"ins-chest",n:"Insignia Chest Press",k:"mach",icon:"m-chest",ex:["lf-chest"]},
+  {id:"ins-fly",n:"Insignia Pectoral Fly / Rear Deltoid",k:"mach",icon:"m-fly",ex:["lf-fly"]},
+  {id:"ins-shp",n:"Insignia Shoulder Press",k:"mach",icon:"m-shp",ex:["lf-shp"]},
+  {id:"ins-row",n:"Insignia Row",k:"mach",icon:"m-row",ex:["lf-row"]},
+  {id:"ins-legp",n:"Insignia Arc Leg Press",k:"mach",icon:"m-legp",ex:["lf-legp"]},
+  {id:"ins-scurl",n:"Insignia Seated Leg Curl",k:"mach",icon:"m-scurl",ex:["lf-scurl"]},
+  {id:"ins-pcurl",n:"Insignia Leg Curl",k:"mach",icon:"m-pcurl",ex:["lf-pcurl"]},
+  {id:"ins-bic",n:"Insignia Biceps Curl",k:"mach",icon:"m-bic",ex:["lf-bic"]},
+  {id:"ins-bic-dep",n:"Insignia Biceps Curl (Dependent)",k:"mach",icon:"m-bic",ex:["lf-bic"]},
+  {id:"ins-tri",n:"Insignia Triceps Extension",k:"mach",icon:"m-tri",ex:["lf-tri"]},
+  {id:"ins-tpress",n:"Triceps Press",k:"mach",icon:"m-tpress",ex:["lf-tpress"]},
+  {id:"ins-abd",n:"Insignia Abdominal",k:"mach",icon:"m-abd",ex:["lf-abdc"]}
 ];
 const GMM = Object.fromEntries(GYM_MODELS.map(x=>[x.id,x]));
 const mModel = m => m.model?GMM[m.model]:null;
@@ -1090,46 +1093,75 @@ const GYM_MAP = {
  /* three labels for the whole floor, large enough on a phone */
  labels:[["Кардио",235,492,0],["Ресепшен",404,104,0],["Зал справа",770,455,0]]
 };
-/* top-down icons, drawn around 0,0: E body, L light detail, G dark detail */
+/* top-down icons, drawn around 0,0, one graphic language for the whole floor (design-taste "drawing the subject",
+   Apple "familiarity" and "craft"):
+   - three levels of detail: B the frame's footprint reads at a glance, P the parts you touch (seat, pads, rollers)
+     describe the machine, M metal (bars, handles, pins) is the small detail; K is iron (weight stack, plates);
+   - depth by flat tone steps only, no outlines but the 2.5-unit metal line, corners 4 / 3 / 1.5;
+   - one orientation everywhere: the stack, the rack or the console at the back (−y), where you sit or stand at the front (+y);
+   - real proportions (about 27 units to a metre); cardio is a step quieter (CB/CD/CP), nothing to log there. */
 const GM_ICON = (()=>{
-  const E="var(--chart-off)", L="var(--chart-2)", G="var(--ground)", C="var(--control)", Q="#3a3a38";
-  const r=(x,y,w,h,f,rx)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(rx??2)+'" fill="'+f+'"/>';
-  const l=(x1,y1,x2,y2,c,w)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+(w||2)+'" stroke-linecap="round"/>';
+  const B="#4a4a47", P="#8f8f8a", M="#e2e2de", K="#1c1c1b", CB="#3a3a38", CD="#2c2c2a", CP="#5c5c58";
+  const r=(x,y,w,h,f,rx)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(rx??1.5)+'" fill="'+f+'"/>';
+  const l=(x1,y1,x2,y2,c,w)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+(c||M)+'" stroke-width="'+(w||2.5)+'" stroke-linecap="round"/>';
   const c=(x,y,rr,f)=>'<circle cx="'+x+'" cy="'+y+'" r="'+rr+'" fill="'+f+'"/>';
-  const bench=pad=>pad+r(-11,-23,4,8,L,1)+r(7,-23,4,8,L,1)+l(-16,-19,16,-19,L,2.5)+r(-19,-24,3.5,10,L,1)+r(15.5,-24,3.5,10,L,1);
+  const ring=(x,y,rr)=>'<circle cx="'+x+'" cy="'+y+'" r="'+rr+'" fill="none" stroke="'+M+'" stroke-width="1.5"/>';
+  const path=(d,col,w)=>'<path d="'+d+'" fill="none" stroke="'+(col||M)+'" stroke-width="'+(w||2.5)+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  /* shared parts */
+  const grip=(x,y)=>c(x,y,2.3,M);
+  const plate=(x,y)=>c(x,y,5.5,K)+ring(x,y,5.5)+c(x,y,1.6,M);                  /* a plate on its horn, seen from above */
+  const bar=(x0,x1,y)=>l(x0,y,x1,y)+r(x0-2,y-7,4,14,K,1)+r(x1-2,y-7,4,14,K,1);  /* barbell with a plate at each end */
+  /* selectorized (Life Fitness): a quiet stack at the back and a thin spine to the seat; what sets each model apart
+     is drawn large and light, so the silhouette tells the machines apart before any detail does */
+  const stack=r(-14,-17,28,9,B,3)+r(-11,-15.5,22,6,K,1.5);
+  const sel=inner=>stack+r(-3,-8,6,22,B,1.5)+inner;
+  /* racks and benches: two uprights with J-hooks and the bar across them */
+  const uprights=(y)=>r(-14,y-3,4,6,M,1)+r(10,y-3,4,6,M,1);
   return {
-   /* cardio: nothing to log here, so it stays one step above the floor */
-   tread: r(-27,-13,54,26,C,5)+r(-15,-8,40,16,Q,3)+r(-27,-13,9,26,E,3),
-   stair: r(-13,-11,26,22,C,4)+r(-13,-11,26,6,E,2)+l(-8,-1,8,-1,Q)+l(-8,4,8,4,Q)+l(-8,9,8,9,Q),
-   bike:  '<ellipse cx="-9" cy="0" rx="5" ry="7.5" fill="'+E+'"/>'+l(-9,0,8,0,C,4)+l(-4,-8,-4,8,C,3)+'<ellipse cx="10" cy="0" rx="5" ry="4" fill="'+C+'"/>',
-   row:   r(-16,-2.5,44,5,E,2)+c(-21,0,8.5,C)+c(-21,0,3,Q)+r(-12,-8,6,16,C,2)+r(7,-5.5,11,11,C,3),
-   ellip: r(-25,-9,50,18,C,6)+r(-14,-7,10,6,Q,2)+r(-14,1,10,6,Q,2)+r(4,-8,6,16,E,2)+r(16,-11,8,22,E,3),
-   recumb: r(-20,-9,22,18,C,4)+r(-23,-9,8,18,E,3)+l(2,0,14,0,C,4)+'<ellipse cx="17" cy="0" rx="5" ry="7.5" fill="'+E+'"/>',
+   /* ---- cardio, a step quieter ---- */
+   tread: r(-27,-13,54,26,CB,5)+r(-16,-9,41,18,CD,3)+r(-27,-13,9,26,CP,3),
+   ellip: r(-25,-9,50,18,CB,6)+r(-15,-7,11,5,CD,2)+r(-15,2,11,5,CD,2)+r(4,-8,9,16,CD,4)+r(-25,-6,6,12,CP,2),
+   stair: r(-13,-11,26,22,CB,4)+r(-13,-11,26,5,CP,2)+l(-8,-1,8,-1,CD,2)+l(-8,3.5,8,3.5,CD,2)+l(-8,8,8,8,CD,2),
+   bike:  l(-9,0,9,0,CB,5)+'<ellipse cx="-9" cy="0" rx="5" ry="8" fill="'+CP+'"/>'+'<ellipse cx="10" cy="0" rx="4.5" ry="4" fill="'+CP+'"/>'+l(-4,-7,-4,7,CB,3),
+   recumb: r(-21,-8,33,16,CB,4)+r(-21,-7,12,14,CP,3)+r(-9,-5,8,10,CD,2)+'<ellipse cx="17" cy="0" rx="5" ry="8" fill="'+CP+'"/>',
+   row:   r(-17,-2.5,45,5,CB,2)+c(-21,0,8.5,CB)+c(-21,0,5,CD)+r(-12,-7,5,14,CP,2)+r(6,-5,10,10,CP,3),
    /* boxing bag hanging from the ceiling: nothing to log */
-   bag:   c(0,0,9,E)+c(0,0,4,Q),
-   bench: bench(r(-7,-13,14,34,E,4)),
-   decl:  bench(r(-7,-13,14,30,E,4)+r(-9,19,18,5,E,2)),
-   incl:  r(-7,-12,14,13,E,3)+r(-7,4,14,10,E,3)+r(-11,-17,4,7,L,1)+r(7,-17,4,7,L,1)+l(-18,-14,18,-14,L,2.5),
-   rack:  r(-22,-20,44,40,C,3)+'<rect x="-22" y="-20" width="44" height="40" rx="3" fill="none" stroke="'+L+'" stroke-width="2"/>'+c(-19,-17,3,L)+c(19,-17,3,L)+c(-19,17,3,L)+c(19,17,3,L)+l(-28,0,28,0,L,3)+r(-28,-7,4,14,L,1)+r(24,-7,4,14,L,1),
-   cable: r(-13,-48,26,17,E,3)+r(-13,31,26,17,E,3)+r(-3,-31,6,62,C,2)+c(0,-39,4,L)+c(0,39,4,L)+l(0,-35,0,35,L,1.5),
-   chin:  r(-16,-17,32,34,E,4)+r(-12,-15,24,8,G,2)+l(-15,-1,15,-1,L,2.5)+r(-7,6,14,6,L,2),
-   bic:   r(-12,-12,24,24,E,4)+r(-9,-10,18,5,G,2)+r(-8,2,16,6,L,3),
-   /* selectorized (Life Fitness): weight stack at the back, back pad, seat */
-   mach:  r(-14,-17,28,10,E,3)+r(-10,-15,20,6,G,2)+r(-9,-3,18,6,L,2)+r(-9,6,18,11,E,3),
-   /* plate-loaded (Hammer Strength): frame and seat, a plate horn on each side */
-   lever: r(-12,-16,24,32,E,4)+r(-8,-4,16,14,G,2)+l(-17,-10,17,-10,L,3)+c(-17,-10,6,L)+c(17,-10,6,L)+c(-17,-10,2,G)+c(17,-10,2,G),
-   /* 45° leg press: sled rail, foot plate at the top, seat below, a plate horn on each side */
-   legpress: r(-13,-30,26,60,E,4)+r(-11,-26,22,8,G,2)+r(-9,10,18,16,L,3)+l(-20,-14,20,-14,L,3)+c(-20,-14,6,L)+c(20,-14,6,L)+c(-20,-14,2,G)+c(20,-14,2,G),
-   hack:  r(-11,-24,22,48,E,4)+r(-9,-21,18,7,G,2)+r(-7,-6,14,22,L,3)+l(-18,6,18,6,L,3)+c(-18,6,5,L)+c(18,6,5,L),
-   smith: r(-30,-13,60,26,C,3)+'<rect x="-30" y="-13" width="60" height="26" rx="3" fill="none" stroke="'+L+'" stroke-width="2"/>'+c(-26,0,3,L)+c(26,0,3,L)+l(-33,0,33,0,L,3)+r(-33,-6,4,12,L,1)+r(29,-6,4,12,L,1),
-   /* lifting platform with a loaded barbell */
-   platform: r(-22,-16,44,32,C,3)+r(-9,-15,18,30,E,2)+l(-26,0,26,0,L,3)+r(-28,-7,5,14,L,1)+r(23,-7,5,14,L,1),
-   /* SYNRGY360: open rig with corner posts, a centre tower and a pull-up bar */
-   rig:   r(-40,-20,80,40,C,3)+'<rect x="-40" y="-20" width="80" height="40" rx="3" fill="none" stroke="'+L+'" stroke-width="2"/>'+c(-37,-17,3,L)+c(37,-17,3,L)+c(-37,17,3,L)+c(37,17,3,L)+c(0,-17,3,L)+c(0,17,3,L)+l(-37,0,37,0,L,2)+r(-6,-6,12,12,E,2),
-   /* turf lane for the sled, grey like the rest: green is for escape routes only */
-   turf:  r(-90,-14,180,28,C,3)+[-60,-30,0,30,60].map(x=>l(x,-11,x,11,Q,2)).join("")+l(-86,0,86,0,Q,1.5),
+   bag:   c(0,0,9,P)+c(0,0,5,B)+c(0,0,2,K),
+   /* ---- free weights ---- */
+   bench: r(-8,-21,16,42,B,4)+r(-6,-13,12,33,P,3)+uprights(-19)+bar(-17,17,-19),
+   decl:  r(-8,-21,16,45,B,4)+r(-6,-13,12,29,P,3)+r(-9,18,18,5,P,2)+uprights(-19)+bar(-17,17,-19),
+   incl:  r(-8,-15,16,31,B,4)+r(-6,-11,12,13,P,3)+r(-6,4,12,10,P,3)+uprights(-14)+bar(-17,17,-14),
+   rack:  r(-22,-20,44,40,B,3)+r(-22,-20,5,5,M,1)+r(17,-20,5,5,M,1)+r(-22,15,5,5,M,1)+r(17,15,5,5,M,1)+r(-19,-3,4,6,M,1)+r(15,-3,4,6,M,1)+bar(-27,27,0),
+   smith: r(-30,-13,60,26,B,3)+r(-27,-11,3,22,M,1)+r(24,-11,3,22,M,1)+bar(-32,32,0)+r(-8,4,16,8,P,2),
+   platform: r(-22,-16,44,32,B,3)+r(-10,-15,20,30,P,2)+bar(-26,26,0),
    /* the L-shaped dumbbell rack with a row of dumbbells on it, centred on its bounding box */
-   dbrack: '<g transform="translate(-733.5 -289)">'+r(643,264,14,50,L,3)+r(657,295,167,14,L,3)+Array.from({length:13},(_,i)=>r(664+i*12.5,298,7,8,G,1.5)).join("")+Array.from({length:3},(_,i)=>r(646,272+i*13,8,7,G,1.5)).join("")+'</g>'
+   dbrack: '<g transform="translate(-733.5 -289)">'+r(643,264,14,50,B,3)+r(657,295,167,14,B,3)
+     +Array.from({length:13},(_,i)=>r(663+i*12.5,297.5,8,9,K,1.5)+l(667+i*12.5,298.5,667+i*12.5,305.5,M,1.5)).join("")
+     +Array.from({length:3},(_,i)=>r(645,271+i*13,10,8,K,1.5)).join("")+'</g>',
+   /* ---- cable and bodyweight ---- */
+   cable: r(-13,-48,26,17,B,3)+r(-10,-46,20,11,K,1.5)+c(0,-40.5,1.6,M)+r(-13,31,26,17,B,3)+r(-10,35,20,11,K,1.5)+c(0,40.5,1.6,M)+r(-3,-31,6,62,B,2)+l(0,-29,0,29,M,1.5)+c(0,-29,3,M)+c(0,29,3,M),
+   chin:  r(-16,-17,32,34,B,4)+r(-12,-15,24,8,K,1.5)+c(0,-11,1.6,M)+l(-14,-3,14,-3)+r(-7,4,14,9,P,3)+grip(-14,-3)+grip(14,-3),
+   bic:   r(-12,-12,24,24,B,4)+r(-9,-10.5,18,5,K,1.5)+r(-11,-2,22,5,P,2.5)+r(-5,5,10,6,P,2),
+   rig:   r(-40,-20,80,40,B,3)+[[-38,-18],[38,-18],[-38,18],[38,18],[0,-18],[0,18]].map(([x,y])=>r(x-2.5,y-2.5,5,5,M,1)).join("")+l(-37,0,37,0,M,2)
+     +[-26,-18,-10].map(x=>c(x,-10,3,K)).join("")+r(12,-12,20,8,P,2)+l(-20,5,-20,15,M,1.5)+l(-14,5,-14,15,M,1.5),
+   turf:  r(-90,-14,180,28,CB,3)+[-60,-30,0,30,60].map(x=>l(x,-11,x,11,CD,2)).join("")+l(-86,0,86,0,CD,1.5),
+   /* ---- plate-loaded (Hammer Strength): no stack, a plate on each horn ---- */
+   lever: r(-12,-16,24,32,B,4)+r(-7,-6,14,6,P,2)+r(-7,2,14,10,P,3)+l(-17,-11,17,-11)+plate(-18,-11)+plate(18,-11),
+   legpress: r(-12,-30,24,60,B,4)+r(-11,-27,22,6,M,2)+r(-8,6,16,12,P,3)+r(-8,20,16,8,P,3)+l(-19,-12,19,-12)+plate(-20,-12)+plate(20,-12),
+   hack:  r(-11,-24,22,48,B,4)+r(-7,-17,14,24,P,3)+r(-10,-21,7,5,P,2)+r(3,-21,7,5,P,2)+r(-10,13,20,8,M,2)+plate(-17,-2)+plate(17,-2),
+   /* ---- selectorized: generic, then one per model of this gym ---- */
+   mach:  sel(r(-7,-6,14,5,P,2)+r(-7,1,14,9,P,3)),
+   "m-chest": sel(r(-7,-6,14,5,P,2)+r(-7,1,14,9,P,3)+path("M-8 -4H-15V12M8 -4H15V12")+grip(-15,13)+grip(15,13)),
+   "m-fly":   sel(r(-6,-6,12,5,P,2)+r(-6,1,12,8,P,3)+path("M-4 -9Q-19 -9 -19 7M4 -9Q19 -9 19 7")+grip(-19,8)+grip(19,8)),
+   "m-shp":   sel(r(-7,-7,14,8,P,2)+r(-7,2,14,8,P,3)+path("M-8 -5L-17 -11M8 -5L17 -11")+grip(-17,-11)+grip(17,-11)),
+   "m-row":   stack+l(-13,-5,13,-5)+grip(-13,-5)+grip(13,-5)+r(-3,-6,6,26,B,1.5)+r(-7,0,14,4,P,2)+r(-6,8,12,10,P,3),
+   "m-legp":  stack+r(-12,-7,24,6,M,1.5)+r(-3,-1,6,22,B,1.5)+r(-7,3,14,7,P,3)+r(-7,11,14,9,P,3),
+   "m-scurl": sel(r(-7,-7,14,4,P,2)+r(-7,-2,14,9,P,3)+l(0,7,0,11,M,2)+r(-12,11,24,5,M,2.5)),
+   "m-pcurl": stack+r(-3,-8,6,24,B,1.5)+r(-6,-6,12,20,P,3)+l(0,14,0,16,M,2)+r(-12,16,24,4,M,2),
+   "m-bic":   sel(r(-15,-5,30,8,P,3)+r(-5,5,10,8,P,3)+grip(-15,-9)+grip(15,-9)+l(-15,-9,-11,-9)+l(15,-9,11,-9)),
+   "m-tri":   sel(r(-9,-5,18,6,P,3)+r(-6,3,12,9,P,3)+l(-15,-11,-15,1)+l(15,-11,15,1)+grip(-15,-11)+grip(15,-11)),
+   "m-tpress":sel(r(-6,-7,12,5,P,2)+r(-6,-1,12,8,P,3)+r(-16,-3,4,13,M,2)+r(12,-3,4,13,M,2)),
+   "m-abd":   sel(r(-8,-5,16,6,P,3)+r(-7,3,14,9,P,3)+'<circle cx="-11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/><circle cx="11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/>')
   };
 })();
 const mapMachines = () => S.map || GYM_MAP.machines;
@@ -1141,9 +1173,14 @@ const canTap = m => !GM_KIND[m.k].idle;
 /* s: the owner's size for this one machine, 1 = the kind's own; only the icon is scaled, marks and tap areas follow mHalf */
 const mSize = m => m.s||1;
 const mHalf = m => GM_KIND[m.k].b.map(v=>v*mSize(m));
-const mIcon = m => mSize(m)===1?GM_ICON[m.k]:'<g transform="scale('+m.s+')">'+GM_ICON[m.k]+'</g>';
+const mIconKey = m => { const md=mModel(m); return md&&md.icon&&md.k===m.k?md.icon:m.k; };
+const mIcon = m => mSize(m)===1?GM_ICON[mIconKey(m)]:'<g transform="scale('+m.s+')">'+GM_ICON[mIconKey(m)]+'</g>';
 function mBox(m){ const [w,h]=mHalf(m), a=m.r*Math.PI/180, c=Math.abs(Math.cos(a)), s=Math.abs(Math.sin(a)); return [c*w+s*h, s*w+c*h]; }
 const mAt = m => 'translate('+(+m.x.toFixed(1))+' '+(+m.y.toFixed(1))+')'+(m.r?' rotate('+m.r+')':'');
+/* names under the machines once the map is close enough to read them: 11px on screen, cut to 18 letters */
+const GM_NAMES_UPP=.6;
+const gmNames = (ms,upp) => upp>GM_NAMES_UPP?"":ms.filter(canTap).map(m=>{const md=mModel(m), t=md?modelShort(md):mName(m), y=m.y+mBox(m)[1]+12*upp;
+  return '<text class="gm-n" style="font-size:'+(11*upp).toFixed(2)+'px" text-anchor="middle" x="'+(+m.x.toFixed(1))+'" y="'+y.toFixed(1)+'">'+esc(t.length>18?t.slice(0,17)+"…":t)+'</text>'}).join("");
 /* exercises of today: the program day on the workout screen, or what is already in the running workout */
 function todayEx(){
   const a=S.active?S.active.exercises.map(e=>e.ex):[], pl=!S.active&&typeof planToday==="function"?planToday():null;
@@ -1166,7 +1203,7 @@ function gmViewUpp(vb){ const w=Math.min(innerWidth,480), h=Math.max(240,innerHe
 function gymMapSvg(sel,vb){
   const today=todayEx(), hot=m=>spotEx(m).some(id=>today.has(id)), ms=mapMachines(), upp=gmViewUpp(vb), hit=22*upp;
   let s=gmFloor();
-  s+=ms.map(m=>'<g transform="'+mAt(m)+'">'+mIcon(m)+'</g>').join("");
+  s+=ms.map(m=>'<g transform="'+mAt(m)+'">'+mIcon(m)+'</g>').join("")+gmNames(ms,upp);
   /* labels stay 13px on screen whatever the zoom */
   s+=GYM_MAP.labels.map(([t,x,y,r])=>'<text class="gm-t" style="font-size:'+(13*upp).toFixed(1)+'px" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
   /* marks and tap targets turn with their machine; the picked one gets a white outline */
@@ -1257,6 +1294,7 @@ function gymMapEdit(){
     return '<g class="gm-m" data-mach="'+esc(m.id)+'" transform="'+mAt(m)+'">'+mIcon(m)
       +(m.id===sel?'<rect class="gm-mark on" x="'+(-w-4)+'" y="'+(-h-4)+'" width="'+(2*w+8)+'" height="'+(2*h+8)+'" rx="7"/>':"")
       +'<rect x="'+(-W)+'" y="'+(-H)+'" width="'+2*W+'" height="'+2*H+'" fill="transparent"><title>'+esc(mName(m))+'</title></rect></g>'}).join("");
+  s+=gmNames(ms,upp);
   return '<svg class="gym-map edit" id="gm-edit" viewBox="'+vbStr(vb)+'" role="application" aria-label="Разметка зала: перетаскивай тренажёры">'+s+'</svg>';
 }
 function viewMapEditor(){
@@ -1323,7 +1361,8 @@ document.addEventListener("pointerdown",ev=>{
   if(gmPtrs.size===2){gmPinchStart(svg);return}
   if(gmPtrs.size>2) return;
   const g=ev.target.closest("[data-mach]"), spot=ev.target.closest("[data-spot]");
-  if(svg.id==="gm-view"){gmDrag={type:"pan",svg,vb:S.sheet.vb.slice(),x0:ev.clientX,y0:ev.clientY,moved:false,spot:spot?spot.dataset.spot:null};return}
+  if(svg.id==="gm-view"){gmDrag={type:"pan",svg,vb:S.sheet.vb.slice(),x0:ev.clientX,y0:ev.clientY,moved:false,spot:spot?spot.dataset.spot:null,el:spot};
+    if(spot) spot.classList.add("down"); return}
   if(g){
     const m=mapMachines().find(x=>x.id===g.dataset.mach), p=svgPt(svg,ev.clientX,ev.clientY);
     gmDrag={type:"move",svg,g,m,from:{x:m.x,y:m.y},snap:JSON.stringify(mapMachines()),dx:p.x-m.x,dy:p.y-m.y,x0:ev.clientX,y0:ev.clientY,moved:false};
@@ -1339,7 +1378,7 @@ document.addEventListener("pointermove",ev=>{
     S.sheet.vb=vbAround(d.svg,d.p,(a.x+b.x)/2,(a.y+b.y)/2,w,h); d.svg.setAttribute("viewBox",vbStr(S.sheet.vb)); return;
   }
   if(!d.moved&&Math.hypot(ev.clientX-d.x0,ev.clientY-d.y0)<5) return;
-  d.moved=true;
+  d.moved=true; if(d.el) d.el.classList.remove("down");
   /* the built-in layout is copied on the first real change, so it stays untouched until then */
   if(d.type==="move"&&!S.map){S.map=GYM_MAP.machines.map(m=>({...m})); d.m=S.map.find(x=>x.id===d.m.id)}
   if(d.type==="move"){
@@ -1378,7 +1417,10 @@ document.addEventListener("wheel",ev=>{
   const svg=ev.target.closest&&ev.target.closest(GM_MAPS); if(!svg) return;
   ev.preventDefault(); const p=svgPt(svg,ev.clientX,ev.clientY);
   gmZoom(ev.deltaY>0?1.15:1/1.15,p.x,p.y); svg.setAttribute("viewBox",vbStr(S.sheet.vb));
+  /* redraw once the wheel rests, so names and tap areas follow the new zoom */
+  clearTimeout(gmWheelT); gmWheelT=setTimeout(render,200);
 },{passive:false});
+let gmWheelT=0;
 /* the map in its own full screen: header, the floor to pan and zoom, a card at the bottom for the picked machine */
 function viewMapSheet(){
   if(S.sheet.edit) return viewMapEditor();

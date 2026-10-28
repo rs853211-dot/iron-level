@@ -13,7 +13,7 @@ const cases = {
   "builtin-ids-unique": () => new Set(machines.map(m => m.id)).size === machines.length,
   "every-kind-drawn": () => { const miss = kinds.filter(k => !icons.includes(k)); return miss.length === 0 || miss; },
   "every-kind-addable": () => { const miss = kinds.filter(k => !add.includes(k)); return miss.length === 0 && add.length === kinds.length || miss; },
-  "models-valid": () => { const cat = window.ironLevelInsights.catalog; const bad = models.filter(m => !/^[\w-]{1,64}$/.test(m.id) || !kinds.includes(m.k) || !m.ex.length || m.ex.some(id => !cat.some(e => e.id === id))).map(m => m.id); return bad.length === 0 && new Set(models.map(m => m.id)).size === models.length || bad; },
+  "models-valid": () => { const cat = window.ironLevelInsights.catalog; const bad = models.filter(m => !/^[\w-]{1,64}$/.test(m.id) || !kinds.includes(m.k) || (m.icon && !icons.includes(m.icon)) || !m.ex.length || m.ex.some(id => !cat.some(e => e.id === id))).map(m => m.id); return bad.length === 0 && new Set(models.map(m => m.id)).size === models.length || bad; },
   "model-kept": () => { const r = pm(file([{id:"a",k:"mach",x:1,y:1,model:"ins-chest"},{id:"b",k:"mach",x:1,y:1,model:'x"y'}])); return r.machines[0].model === "ins-chest" && !("model" in r.machines[1]) || r; },
   "kind-ex-known": () => { const cat = window.ironLevelInsights.catalog; const bad = Object.entries(kindEx).flatMap(([k, ex]) => ex === "cable" ? [] : ex.filter(id => !cat.some(e => e.id === id)).map(id => k + ":" + id)); return bad.length === 0 || bad; },
   "bad-json": () => { const r = pm("{nope"); return r.ok === false && r.error === "Не получилось прочитать файл. Это точно JSON карты из Iron Level?" || r; },
