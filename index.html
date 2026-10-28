@@ -132,6 +132,12 @@ p{margin:0}
 .gm-spot{fill:transparent;stroke:transparent;stroke-width:3;cursor:pointer}
 .gm-mark{fill:none;stroke-width:3;pointer-events:none} .gm-mark.on{stroke:var(--text)} .gm-mark.hot{stroke:var(--accent)}
 .gm-spot:focus-visible{outline:none;stroke:var(--text)}
+.mapfull{position:fixed;inset:0;z-index:45;background:var(--ground);padding-top:env(safe-area-inset-top,0px)}
+.mapfull-in{max-width:480px;height:100%;margin:0 auto;display:flex;flex-direction:column}
+.mapfull-top{padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.mapfull-map{position:relative;flex:1;min-height:0}
+.gym-map.view{position:absolute;inset:0;width:100%;height:100%;border-radius:0;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.mapfull-card{position:absolute;left:0;right:0;bottom:0;max-height:48%;overflow:auto;overscroll-behavior:contain;background:var(--surface);border-radius:20px 20px 0 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px))}
 .gym-map.edit{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 .gym-map.edit .gm-m{cursor:move} .gym-map.edit text{pointer-events:none}
 .stepper{display:flex;gap:6px;align-items:center}
@@ -774,7 +780,7 @@ const INTRO = [
  {t:"Ранги и отдых",p:"У каждой группы мышц свой ранг по силе. Группе, которую ты качал сегодня или вчера, лучше дать отдохнуть.",
   rows:[["Бронза → Элита","пять рангов, сила от 0 до 100"],["Отдыхает","группу качали сегодня или вчера"],["Перерыв","дней с прошлой тренировки"],["Серия","недели подряд с двумя и больше тренировками"]]},
  {t:"Твой зал и данные",p:"Записи хранятся только на этом телефоне. Время от времени сохраняй копию в файл.",
-  rows:[["Карта зала","на вкладке «Тренировка»: нажми на стойку или тренажёр и начни упражнение"],["Разметить зал","на карте: перетащи и поверни тренажёры, как они стоят в твоём зале, и сохрани в файл"],["Мой зал","убери тренажёры, которых нет, и добавь свои"],["Сохранить в файл","резервная копия в «Файлы» или iCloud"],["Загрузить из файла","перенос на новый телефон"],["ИИ-тренер","разбор тренировок, когда приложение открыто в Claude"]]}
+  rows:[["Карта зала","на вкладке «Тренировка», на весь экран: двигай и приближай пальцами, нажми на тренажёр и начни упражнение"],["Разметить зал","на карте: перетащи и поверни тренажёры, как они стоят в твоём зале, и сохрани в файл"],["Мой зал","убери тренажёры, которых нет, и добавь свои"],["Сохранить в файл","резервная копия в «Файлы» или iCloud"],["Загрузить из файла","перенос на новый телефон"],["ИИ-тренер","разбор тренировок, когда приложение открыто в Claude"]]}
 ];
 function viewIntro(){
   const i=S.intro, sl=INTRO[i], last=i===INTRO.length-1;
@@ -1026,7 +1032,8 @@ const GM_KIND = {
 const placeAll = (k,pts) => pts.map(([x,y],i)=>({id:k+"-"+(i+1),k,x:+x.toFixed(1),y:+y.toFixed(1),r:0}));
 const GYM_MAP = {
  outline:[[22,35],[157,20],[195,38],[355,26],[450,26],[450,98],[550,98],[550,167],[460,167],[460,215],[580,215],[595,195],[595,162],[892,162],[892,585],[648,585],[648,710],[615,720],[530,570],[310,615],[315,680],[270,685],[235,538],[135,555]],
- routes:[[[30,50],[95,50],[180,415],[138,420]],[[325,105],[550,105],[550,132],[370,132],[415,435],[645,435],[645,470],[422,470],[530,720],[490,730],[382,470],[325,132]]],
+ /* the escape route along the treadmills is left off: it covered them (owner asked to remove it) */
+ routes:[[[325,105],[550,105],[550,132],[370,132],[415,435],[645,435],[645,470],[422,470],[530,720],[490,730],[382,470],[325,132]]],
  columns:[[170,280],[198,415],[315,250],[508,250],[775,248],[343,387],[510,385],[373,522],[513,519],[776,380],[778,513]],
  walls:[[645,313,892,310],[645,313,645,435],[645,470,648,585]],
  screen:[198,415,343,387],
@@ -1120,17 +1127,29 @@ function gmFloor(grid){
   s+=M.fixtures.map(([,x,y,w,h])=>'<rect class="gm-fix" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6"/>').join("");
   return s;
 }
-function gymMapSvg(sel){
-  const today=todayEx(), hot=m=>spotEx(m).some(id=>today.has(id)), ms=mapMachines();
+/* map units per screen pixel of the full-screen map; drawn before layout, so the screen is estimated */
+function gmViewUpp(vb){ const w=Math.min(innerWidth,480), h=Math.max(240,innerHeight-120); return Math.max(vb[2]/w, vb[3]/h); }
+function gymMapSvg(sel,vb){
+  const today=todayEx(), hot=m=>spotEx(m).some(id=>today.has(id)), ms=mapMachines(), upp=gmViewUpp(vb), hit=22*upp;
   let s=gmFloor();
   s+=ms.map(m=>'<g transform="'+mAt(m)+'">'+mIcon(m)+'</g>').join("");
-  s+=GYM_MAP.labels.map(([t,x,y,r])=>'<text class="gm-t" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
+  /* labels stay 13px on screen whatever the zoom */
+  s+=GYM_MAP.labels.map(([t,x,y,r])=>'<text class="gm-t" style="font-size:'+(13*upp).toFixed(1)+'px" text-anchor="middle" x="'+x+'" y="'+y+'" transform="rotate('+r+' '+x+' '+y+')">'+t+'</text>').join("");
   /* marks and tap targets turn with their machine; the picked one gets a white outline */
   s+=ms.filter(m=>canTap(m)&&(m.id===sel||hot(m))).map(m=>{const [w,h]=mHalf(m);
     return '<g transform="'+mAt(m)+'"><rect class="gm-mark '+(m.id===sel?'on':'hot')+'" x="'+(-w-4)+'" y="'+(-h-4)+'" width="'+(2*w+8)+'" height="'+(2*h+8)+'" rx="7"/></g>'}).join("");
-  s+=ms.filter(canTap).map(m=>{const [w,h]=mHalf(m), W=Math.max(30,w+4), H=Math.max(30,h+4);
+  s+=ms.filter(canTap).map(m=>{const [w,h]=mHalf(m), W=Math.max(hit,w+4), H=Math.max(hit,h+4);
     return '<g transform="'+mAt(m)+'"><rect class="gm-spot" data-spot="'+esc(m.id)+'" x="'+(-W)+'" y="'+(-H)+'" width="'+2*W+'" height="'+2*H+'" rx="8" role="button" tabindex="0" aria-label="'+esc(mName(m))+'"><title>'+esc(mName(m))+'</title></rect></g>'}).join("");
-  return '<svg class="gym-map" viewBox="0 0 900 740" role="img" aria-label="Карта зала">'+s+'</svg>';
+  return '<svg class="gym-map view" id="gm-view" viewBox="'+vbStr(vb)+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Карта зала: двигай пальцем, щипок или двойное касание меняют масштаб">'+s+'</svg>';
+}
+/* where the map opens: around the machines of today's exercises, or the whole floor */
+function gmFocus(){
+  const today=todayEx(), hot=mapMachines().filter(m=>canTap(m)&&spotEx(m).some(id=>today.has(id)));
+  if(!hot.length) return GM_VB.slice();
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const m of hot){const [hx,hy]=mBox(m); x0=Math.min(x0,m.x-hx); y0=Math.min(y0,m.y-hy); x1=Math.max(x1,m.x+hx); y1=Math.max(y1,m.y+hy)}
+  const w=Math.max(280,x1-x0+80), h=Math.max(280,y1-y0+80);
+  return [(x0+x1-w)/2,(y0+y1-h)/2,w,h];
 }
 /* ---------- map layout: stored on this phone, saved to and loaded from a JSON file ---------- */
 const MAP_V=1;
@@ -1237,8 +1256,16 @@ function viewMapEditor(){
     <input type="file" id="map-file" accept=".json,application/json" tabindex="-1" aria-hidden="true" style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0">
   </div></div>`;
 }
-/* drag a machine, drag the floor to pan, pinch or wheel to zoom; the svg is updated in place and redrawn on release */
-let gmDrag=null;
+/* editor: drag a machine; both maps: drag the floor to pan, pinch or wheel to zoom; the full-screen map also takes a
+   tap (pick a machine or clear it) and a double tap (zoom in). The svg is updated in place and redrawn on release. */
+let gmDrag=null, gmTap=null;
+const GM_MAPS="#gm-edit,#gm-view";
+/* the viewBox of size w×h that keeps map point p under screen point (cx,cy); the svg letterboxes it ("meet") */
+function vbAround(svg,p,cx,cy,w,h){
+  const r=svg.getBoundingClientRect(), u=Math.max(w/r.width,h/r.height), ox=(r.width-w/u)/2, oy=(r.height-h/u)/2;
+  return [p.x-(cx-r.left-ox)*u, p.y-(cy-r.top-oy)*u, w, h];
+}
+const gmUpp = (svg,vb) => { const r=svg.getBoundingClientRect(); return Math.max(vb[2]/r.width,vb[3]/r.height); };
 const gmPtrs=new Map();
 const svgPt = (svg,x,y) => new DOMPoint(x,y).matrixTransform(svg.getScreenCTM().inverse());
 const gmSnap = v => Math.round(v/5)*5;
@@ -1247,15 +1274,17 @@ function gmPinchStart(svg){
   if(gmDrag&&gmDrag.type==="move"){Object.assign(gmDrag.m,gmDrag.from)}
   gmDrag={type:"pinch",svg,vb:S.sheet.vb.slice(),d0:Math.hypot(a.x-b.x,a.y-b.y)||1,r,
     p:svgPt(svg,(a.x+b.x)/2,(a.y+b.y)/2)};
+  gmTap=null;
 }
 document.addEventListener("pointerdown",ev=>{
-  const svg=ev.target.closest&&ev.target.closest("#gm-edit"); if(!svg) return;
+  const svg=ev.target.closest&&ev.target.closest(GM_MAPS); if(!svg) return;
   ev.preventDefault();
   try{svg.setPointerCapture(ev.pointerId)}catch(e){}
   gmPtrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
   if(gmPtrs.size===2){gmPinchStart(svg);return}
   if(gmPtrs.size>2) return;
-  const g=ev.target.closest("[data-mach]");
+  const g=ev.target.closest("[data-mach]"), spot=ev.target.closest("[data-spot]");
+  if(svg.id==="gm-view"){gmDrag={type:"pan",svg,vb:S.sheet.vb.slice(),x0:ev.clientX,y0:ev.clientY,moved:false,spot:spot?spot.dataset.spot:null};return}
   if(g){
     const m=mapMachines().find(x=>x.id===g.dataset.mach), p=svgPt(svg,ev.clientX,ev.clientY);
     gmDrag={type:"move",svg,g,m,from:{x:m.x,y:m.y},snap:JSON.stringify(mapMachines()),dx:p.x-m.x,dy:p.y-m.y,x0:ev.clientX,y0:ev.clientY,moved:false};
@@ -1268,8 +1297,7 @@ document.addEventListener("pointermove",ev=>{
   if(d.type==="pinch"){
     const [a,b]=[...gmPtrs.values()]; if(!b) return;
     const k=d.d0/(Math.hypot(a.x-b.x,a.y-b.y)||1), w=Math.min(960,Math.max(120,d.vb[2]*k)), h=d.vb[3]*w/d.vb[2];
-    const mx=((a.x+b.x)/2-d.r.left)/d.r.width, my=((a.y+b.y)/2-d.r.top)/d.r.height;
-    S.sheet.vb=[d.p.x-mx*w, d.p.y-my*h, w, h]; d.svg.setAttribute("viewBox",vbStr(S.sheet.vb)); return;
+    S.sheet.vb=vbAround(d.svg,d.p,(a.x+b.x)/2,(a.y+b.y)/2,w,h); d.svg.setAttribute("viewBox",vbStr(S.sheet.vb)); return;
   }
   if(!d.moved&&Math.hypot(ev.clientX-d.x0,ev.clientY-d.y0)<5) return;
   d.moved=true;
@@ -1279,7 +1307,7 @@ document.addEventListener("pointermove",ev=>{
     const p=svgPt(d.svg,ev.clientX,ev.clientY);
     d.m.x=gmSnap(p.x-d.dx); d.m.y=gmSnap(p.y-d.dy); d.g.setAttribute("transform",mAt(d.m));
   } else {
-    const upp=d.vb[2]/d.svg.getBoundingClientRect().width;
+    const upp=gmUpp(d.svg,d.vb);
     S.sheet.vb=[d.vb[0]-(ev.clientX-d.x0)*upp, d.vb[1]-(ev.clientY-d.y0)*upp, d.vb[2], d.vb[3]];
     d.svg.setAttribute("viewBox",vbStr(S.sheet.vb));
   }
@@ -1290,6 +1318,15 @@ function gmPointerEnd(ev){
   const d=gmDrag; if(!d) return;
   if(d.type==="pinch"){ if(!gmPtrs.size){gmDrag=null;render()} return; }
   gmDrag=null;
+  if(d.svg.id==="gm-view"){
+    if(d.moved){render();return}
+    /* a second tap close by within 300 ms zooms in there; a single tap picks the machine under it or clears the pick */
+    const now=Date.now();
+    if(gmTap&&now-gmTap.t<300&&Math.hypot(ev.clientX-gmTap.x,ev.clientY-gmTap.y)<30){
+      gmTap=null; const p=svgPt(d.svg,ev.clientX,ev.clientY); gmZoom(.5,p.x,p.y);
+    } else {gmTap={t:now,x:ev.clientX,y:ev.clientY}; S.sheet.spot=d.spot}
+    render(); return;
+  }
   if(d.type==="move"){
     if(S.sheet.sel!==d.m.id){S.sheet.sel=d.m.id;S.sheet.exEdit=false}
     if(d.moved){(S.sheet.undo||(S.sheet.undo=[])).push(d.snap); mapStore.set(S.map)}
@@ -1299,26 +1336,33 @@ function gmPointerEnd(ev){
 document.addEventListener("pointerup",gmPointerEnd);
 document.addEventListener("pointercancel",gmPointerEnd);
 document.addEventListener("wheel",ev=>{
-  const svg=ev.target.closest&&ev.target.closest("#gm-edit"); if(!svg) return;
+  const svg=ev.target.closest&&ev.target.closest(GM_MAPS); if(!svg) return;
   ev.preventDefault(); const p=svgPt(svg,ev.clientX,ev.clientY);
   gmZoom(ev.deltaY>0?1.15:1/1.15,p.x,p.y); svg.setAttribute("viewBox",vbStr(S.sheet.vb));
 },{passive:false});
+/* the map in its own full screen: header, the floor to pan and zoom, a card at the bottom for the picked machine */
 function viewMapSheet(){
   if(S.sheet.edit) return viewMapEditor();
   const ms=mapMachines(), sp=ms.find(x=>x.id===S.sheet.spot), ids=sp?spotEx(sp):[];
+  const hasToday=ms.some(m=>canTap(m)&&spotEx(m).some(id=>todayEx().has(id)));
   /* what the floor still lacks: exercises of the machine zones that no machine on the map is linked to */
   const linked=new Set(ms.flatMap(spotEx));
   const missing=["hs","lf","func"].map(z=>[ZONES[z].split(" · ")[0],ALL.filter(e=>e.z===z&&!isHidden(e.id)&&!linked.has(e.id)).length]).filter(x=>x[1]);
-  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="map-h" data-stop>
-    <div class="row between"><div><h2 id="map-h">Карта зала</h2><p class="meta">${esc(gymName())} · нажми на тренажёр</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
-    ${gymMapSvg(S.sheet.spot)}
-    ${ms.some(m=>spotEx(m).some(id=>todayEx().has(id)))?`<div class="key"><span><i style="background:var(--accent)"></i>${S.active?"Упражнения этой тренировки":"Упражнения сегодняшнего дня программы"}</span></div>`:""}
-    ${sp?`<div class="well stack" style="gap:8px"><h3>${esc(mName(sp))}</h3>${ids.length?`<div class="list">${ids.map(id=>{const e=EXM[id], l=lastSetsFor(id), top=l?topSet(l.sets):null;
-      return `<button class="li" data-map-ex="${esc(id)}"><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span><span class="fig sub" aria-hidden="true">${S.active?"Добавить":"Начать"}</span></button>`}).join("")}</div>`
-      :'<p class="sub">У этого тренажёра нет упражнений. Привяжи их в разметке или верни в «Мой зал».</p>'}</div>`
-     :'<p class="sub" style="font-size:13px">Нажми на стойку, скамью, гантели или тренажёр, чтобы добавить упражнение в тренировку.</p>'}
-    ${missing.length?`<p class="meta num">Ещё без места на карте: ${missing.map(([n,k])=>n+" — "+k+" "+plural(k,"упражнение","упражнения","упражнений")).join(", ")}. Они есть в списке упражнений.</p>`:""}
-    <button class="btn block" data-act="map-edit">Разметить зал</button>
+  return `<div class="mapfull" role="dialog" aria-modal="true" aria-labelledby="map-h"><div class="mapfull-in">
+    <div class="mapfull-top stack" style="gap:10px">
+      <div class="row between"><div class="grow"><h2 id="map-h">Карта зала</h2><p class="meta">${esc(gymName())}</p></div>
+        <button class="btn small" data-act="map-edit">Разметить</button><button class="btn small" data-act="close-sheet">Готово</button></div>
+      <div class="seg" role="group" aria-label="Масштаб карты"><button data-act="map-vb">Весь зал</button>${hasToday?'<button data-act="map-today">Сегодня</button>':""}<button data-act="map-zoom-out" aria-label="Уменьшить" style="flex:none;padding:0 18px">−</button><button data-act="map-zoom-in" aria-label="Увеличить" style="flex:none;padding:0 18px">+</button></div>
+    </div>
+    <div class="mapfull-map">${gymMapSvg(S.sheet.spot,S.sheet.vb)}
+      <div class="mapfull-card stack" style="gap:8px">${sp?`<div class="row between"><h3>${esc(mName(sp))}</h3><button class="btn small ghost" data-act="map-unpick">Закрыть</button></div>
+        ${ids.length?`<div class="list">${ids.map(id=>{const e=EXM[id], l=lastSetsFor(id), top=l?topSet(l.sets):null;
+        return `<button class="li" data-map-ex="${esc(id)}"><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${GROUPS[e.g]}${top?` · ${relDate(l.date).toLowerCase()}: ${fmtW(+top.w)} кг × ${top.r}`:""}</span></span><span class="fig sub" aria-hidden="true">${S.active?"Добавить":"Начать"}</span></button>`}).join("")}</div>`
+        :'<p class="sub">У этого тренажёра нет упражнений. Привяжи их в разметке или верни в «Мой зал».</p>'}`
+      :`${hasToday?`<div class="key"><span><i style="background:var(--accent)"></i>${S.active?"Упражнения этой тренировки":"Упражнения сегодняшнего дня программы"}</span></div>`:""}
+        <p class="sub" style="font-size:13px">Нажми на тренажёр, чтобы начать упражнение. Двигай карту пальцем, щипок или двойное касание приближают.</p>
+        ${missing.length?`<p class="meta num">Ещё без места на карте: ${missing.map(([n,k])=>n+" — "+k+" "+plural(k,"упражнение","упражнения","упражнений")).join(", ")}.</p>`:""}`}
+      </div></div>
   </div></div>`;
 }
 function gymName(){return (S.profile&&S.profile.gym)||"Crunch Fit Lichtenberg"}
@@ -1577,10 +1621,12 @@ document.addEventListener("click",async ev=>{
     case "intro-open": S.intro=0; render(); window.scrollTo(0,0); break;
     case "go-workout": S.tab="workout"; render(); break;
     case "open-lib": S.sheet={g:"all",q:""}; render(); break;
-    case "open-map": S.sheet={mode:"map",spot:null}; render(); break;
+    case "open-map": S.sheet={mode:"map",spot:null,vb:gmFocus()}; render(); break;
+    case "map-today": S.sheet.vb=gmFocus(); render(); break;
+    case "map-unpick": S.sheet.spot=null; render(); break;
     case "close-sheet": S.sheet=null; render(); break;
     case "map-edit": S.sheet={mode:"map",edit:true,vb:GM_VB.slice(),sel:null,undo:[]}; render(); break;
-    case "map-edit-done": S.sheet={mode:"map",spot:null}; render(); break;
+    case "map-edit-done": S.sheet={mode:"map",spot:null,vb:gmFocus()}; render(); break;
     case "map-vb": S.sheet.vb=GM_VB.slice(); render(); break;
     case "map-zoom-in": gmZoom(1/1.4); render(); break;
     case "map-zoom-out": gmZoom(1.4); render(); break;
