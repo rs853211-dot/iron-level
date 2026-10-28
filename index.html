@@ -134,6 +134,9 @@ p{margin:0}
 .gm-spot:focus-visible{outline:none;stroke:var(--text)}
 .gym-map.edit{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 .gym-map.edit .gm-m{cursor:move} .gym-map.edit text{pointer-events:none}
+.stepper{display:flex;gap:6px;align-items:center}
+.stepper .btn{flex:none;width:44px;min-height:48px;padding:0;font-size:18px;font-weight:500}
+.field .stepper input{flex:1;min-width:0;padding:0 4px;text-align:center;background:var(--ground)}
 .well .btn:not(.primary):not(.danger),.well .chips button:not([aria-pressed="true"]){background:var(--active)}
 .intro-fig svg{display:block;height:220px;width:auto;margin:0 auto}
 .dots{display:flex;justify-content:center;gap:8px}
@@ -1181,6 +1184,9 @@ function mapEdit(fn){
   if(S.map){(S.sheet.undo||(S.sheet.undo=[])).push(snap); if(S.sheet.undo.length>50) S.sheet.undo.shift()}
   mapStore.set(S.map); render();
 }
+/* angle any whole number, kept as 0–359; size 40–300%, 100% is not stored */
+const mSetRot = (m,v) => { m.r=((Math.round(v)%360)+360)%360; };
+const mSetSize = (m,v) => { const s=Math.min(GM_SIZE[1],Math.max(GM_SIZE[0],+v.toFixed(2))); if(s===1) delete m.s; else m.s=s; };
 const selM = () => S.sheet&&S.sheet.sel?mapMachines().find(m=>m.id===S.sheet.sel):null;
 function gmZoom(f,cx,cy){
   const [x,y,w,h]=S.sheet.vb, nw=Math.min(960,Math.max(120,w*f)), k=nw/w;
@@ -1210,10 +1216,12 @@ function viewMapEditor(){
     <div class="seg" role="group" aria-label="Масштаб"><button data-act="map-vb">Весь зал</button><button data-act="map-zoom-out" aria-label="Уменьшить" style="flex:none;padding:0 18px">−</button><button data-act="map-zoom-in" aria-label="Увеличить" style="flex:none;padding:0 18px">+</button></div>
     ${gymMapEdit()}
     ${m?`<div class="well stack" style="gap:10px">
-      <div class="row between"><h3 id="m-title">${esc(mName(m))}</h3><span class="meta num">${Math.round(m.r)}°</span></div>
+      <div class="row between"><h3 id="m-title">${esc(mName(m))}</h3></div>
       <div class="field"><label for="m-name">Название, как на табличке</label><input id="m-name" maxlength="40" value="${esc(m.n||"")}" placeholder="${esc(GM_KIND[m.k].n)}…" autocomplete="off" spellcheck="false" style="background:var(--ground)"></div>
-      <div class="grid3"><button class="btn small" data-act="m-rot" data-d="-15">−15°</button><button class="btn small" data-act="m-rot" data-d="15">+15°</button><button class="btn small" data-act="m-rot" data-d="90">+90°</button></div>
-      <div class="grid3" role="group" aria-label="Размер иконки"><button class="btn small" data-act="m-size" data-d="-0.1" ${mSize(m)<=GM_SIZE[0]?"disabled":""}>Меньше</button><button class="btn small num" data-act="m-size" data-d="0" aria-label="Обычный размер" ${mSize(m)===1?"disabled":""}>${Math.round(mSize(m)*100)}%</button><button class="btn small" data-act="m-size" data-d="0.1" ${mSize(m)>=GM_SIZE[1]?"disabled":""}>Больше</button></div>
+      <div class="grid2">
+        <div class="field"><label for="m-rot">Поворот, °</label><div class="stepper"><button class="btn" data-act="m-rot" data-d="-15" aria-label="Повернуть на 15° против часовой">−</button><input id="m-rot" class="num" inputmode="numeric" enterkeyhint="done" maxlength="4" value="${Math.round(m.r)}" autocomplete="off"><button class="btn" data-act="m-rot" data-d="15" aria-label="Повернуть на 15° по часовой">+</button></div></div>
+        <div class="field"><label for="m-size">Размер, %</label><div class="stepper"><button class="btn" data-act="m-size" data-d="-0.1" aria-label="Меньше на 10%" ${mSize(m)<=GM_SIZE[0]?"disabled":""}>−</button><input id="m-size" class="num" inputmode="numeric" enterkeyhint="done" maxlength="3" value="${Math.round(mSize(m)*100)}" autocomplete="off"><button class="btn" data-act="m-size" data-d="0.1" aria-label="Больше на 10%" ${mSize(m)>=GM_SIZE[1]?"disabled":""}>+</button></div></div>
+      </div>
       <div class="chips" role="group" aria-label="Вид тренажёра">${GM_ADD.map(k=>`<button data-act="m-kind" data-k="${k}" aria-pressed="${m.k===k}">${GM_KIND[k].n}</button>`).join("")}</div>
       ${GM_KIND[m.k].idle?'<p class="meta">Здесь нечего записывать: упражнений нет.</p>'
         :`<div class="row between" style="align-items:flex-start"><p class="sub grow" style="font-size:13px">${exIds.length?exIds.map(id=>esc(EXM[id].n)).join(", "):"Упражнения не выбраны: на карте его не нажать"}</p>
@@ -1578,8 +1586,8 @@ document.addEventListener("click",async ev=>{
     case "map-zoom-out": gmZoom(1.4); render(); break;
     case "m-add":{const k=t.dataset.k, [x,y,w,h]=S.sheet.vb, id=k+"-"+uid();
       mapEdit(()=>{S.map.push({id,k,x:gmSnap(x+w/2),y:gmSnap(y+h/2),r:0});S.sheet.sel=id;S.sheet.exEdit=false}); break}
-    case "m-size":{const d=+t.dataset.d; mapEdit(()=>{const m=selM(), v=d?Math.min(GM_SIZE[1],Math.max(GM_SIZE[0],+(mSize(m)+d).toFixed(2))):1; if(v===1) delete m.s; else m.s=v}); break}
-    case "m-rot":{const d=+t.dataset.d; mapEdit(()=>{const m=selM(); m.r=((m.r+d)%360+360)%360}); break}
+    case "m-size":{const d=+t.dataset.d; mapEdit(()=>mSetSize(selM(),mSize(selM())+d)); break}
+    case "m-rot":{const d=+t.dataset.d; mapEdit(()=>mSetRot(selM(),selM().r+d)); break}
     case "m-kind":{const k=t.dataset.k; mapEdit(()=>{selM().k=k}); break}
     case "m-dup":{const id=selM().k+"-"+uid(); mapEdit(()=>{const m=selM(); S.map.push({...m,id,x:m.x+2*mBox(m)[0]+10,ex:Array.isArray(m.ex)?m.ex.slice():m.ex}); S.sheet.sel=id}); break}
     case "m-del":{const n=mName(selM()); mapEdit(()=>{S.map=S.map.filter(m=>m.id!==S.sheet.sel);S.sheet.sel=null;S.sheet.exEdit=false}); toast(n+": удалён. Можно отменить"); break}
@@ -1628,6 +1636,11 @@ document.addEventListener("change",async ev=>{
   const el=ev.target;
   if(el.id==="imp-file"){await readImportFile(el);return}
   if(el.id==="map-file"){await readMapFile(el);return}
+  /* typed angle or size: "150%", "45°" and "1,5" all read as numbers; anything else puts the old value back */
+  if((el.id==="m-rot"||el.id==="m-size")&&S.sheet&&S.sheet.edit&&selM()){
+    const v=parseFloat(el.value.replace(",",".").replace(/[^\d.-]/g,""));
+    if(isNaN(v)){render();return}
+    mapEdit(()=>el.id==="m-rot"?mSetRot(selM(),v):mSetSize(selM(),v/100)); return}
   if(el.dataset&&el.dataset.mex){const id=el.dataset.mex, on=el.checked;
     mapEdit(()=>{const m=selM(), cur=spotEx(m), ex=on?cur.concat([id]):cur.filter(x=>x!==id); m.ex=ex}); return}
   if(!el.dataset||!el.dataset.toggleEx) return;
@@ -1636,6 +1649,7 @@ document.addEventListener("change",async ev=>{
   const m=document.querySelector("#gym-h + .meta"); if(m) m.textContent=gymName()+" · "+ALL.filter(e=>!isHidden(e.id)).length+" из "+ALL.length+" тренажёров и упражнений";
 });
 document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&S.sheet){S.sheet=null;render()}
+  if(ev.key==="Enter"&&(ev.target.id==="m-rot"||ev.target.id==="m-size")){ev.preventDefault();ev.target.blur()}
   if((ev.key==="Enter"||ev.key===" ")&&ev.target.dataset&&ev.target.dataset.spot){ev.preventDefault();ev.target.dispatchEvent(new MouseEvent("click",{bubbles:true}))} });
 function readOnb(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};return Object.assign({},S.onb||{},{name:g("o-name"),bw:g("o-bw"),height:g("o-h"),age:g("o-age")})}
 function readProfileInputs(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};
