@@ -1,6 +1,6 @@
 // Browser tests for the gym map layout file. Run on http://localhost:8000:
 //   (await import('/tests/map.test.js?'+Date.now())).run()
-const {parseMap: pm, makeMapFile: mk, kinds, icons, add, kindEx, machines} = window.ironLevelMap;
+const {parseMap: pm, makeMapFile: mk, kinds, icons, add, kindEx, models, machines} = window.ironLevelMap;
 
 const S = o => JSON.stringify(o);
 const M = [{id:"rack-1",k:"rack",x:864,y:191,r:0},{id:"m-1",k:"lever",x:500.5,y:300,r:90,n:"Hammer Strength Chest Press",ex:["hs-bench"]},{id:"cab",k:"cable",x:1,y:2,r:0,ex:"cable"}];
@@ -13,6 +13,8 @@ const cases = {
   "builtin-ids-unique": () => new Set(machines.map(m => m.id)).size === machines.length,
   "every-kind-drawn": () => { const miss = kinds.filter(k => !icons.includes(k)); return miss.length === 0 || miss; },
   "every-kind-addable": () => { const miss = kinds.filter(k => !add.includes(k)); return miss.length === 0 && add.length === kinds.length || miss; },
+  "models-valid": () => { const cat = window.ironLevelInsights.catalog; const bad = models.filter(m => !/^[\w-]{1,64}$/.test(m.id) || !kinds.includes(m.k) || !m.ex.length || m.ex.some(id => !cat.some(e => e.id === id))).map(m => m.id); return bad.length === 0 && new Set(models.map(m => m.id)).size === models.length || bad; },
+  "model-kept": () => { const r = pm(file([{id:"a",k:"mach",x:1,y:1,model:"ins-chest"},{id:"b",k:"mach",x:1,y:1,model:'x"y'}])); return r.machines[0].model === "ins-chest" && !("model" in r.machines[1]) || r; },
   "kind-ex-known": () => { const cat = window.ironLevelInsights.catalog; const bad = Object.entries(kindEx).flatMap(([k, ex]) => ex === "cable" ? [] : ex.filter(id => !cat.some(e => e.id === id)).map(id => k + ":" + id)); return bad.length === 0 || bad; },
   "bad-json": () => { const r = pm("{nope"); return r.ok === false && r.error === "Не получилось прочитать файл. Это точно JSON карты из Iron Level?" || r; },
   "wrong-app": () => { const r = pm(S({app:"iron-level",machines:M})); return r.error === "Это не файл карты Iron Level" || r; },
