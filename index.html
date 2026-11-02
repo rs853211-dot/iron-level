@@ -331,8 +331,45 @@ const PROGRAMS = [
   {id:"pull",n:"Пул",sl:[sl(["pull","lf-lat","lat","hs-flat"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["cab-row","lf-row","dbrow"],ISO),sl(["cab-face","lf-fly"],ABS),sl(["curl","lf-bic","cab-curl"],ISO),sl(["hammer","cab-curl"],ISO)]},
   {id:"legs",n:"Ноги",sl:[sl(["squat","smith","hs-hack"],BASE),sl(["rdl","lf-scurl"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["lf-scurl"],ISO),sl(["hs-calf"],ISO),sl(["hang","lf-abdc","cable-cr"],ABS)]}]}
 ];
-/* no prototype, so ids from a backup file like "constructor" never match */
-const PRM = Object.assign(Object.create(null), Object.fromEntries(PROGRAMS.map(p=>[p.id,p])));
+/* PRM: every program in use, built-in or the user's own (profile.programs). A user program with a built-in id replaces
+   that built-in (an edited copy); any other id is a program of their own. No prototype, so ids like "constructor" never match. */
+const PROG_BASE = Object.assign(Object.create(null), Object.fromEntries(PROGRAMS.map(p=>[p.id,p])));
+const PRM = Object.create(null);
+const MAX_PROGS=12, MAX_DAYS=8, MAX_SLOTS=14;
+const isO = v => !!v && typeof v==="object" && !Array.isArray(v);
+const okId = v => typeof v==="string" && /^[\w-]{1,64}$/.test(v);
+const okReps = v => typeof v==="string" && /^[\d–+\- ]{1,8}$/.test(v) && /\d/.test(v);
+/* programs from storage or a backup file are untrusted: names end up in HTML, ids in attributes */
+function cleanPrograms(a){
+  if(!Array.isArray(a)) return [];
+  const out=[], ids=new Set();
+  for(const p of a){
+    if(out.length>=MAX_PROGS) break;
+    if(!isO(p)||!okId(p.id)||ids.has(p.id)||typeof p.n!=="string"||!p.n.trim()||!Array.isArray(p.days)) continue;
+    const days=[], dids=new Set();
+    for(const d of p.days){
+      if(days.length>=MAX_DAYS) break;
+      if(!isO(d)||!okId(d.id)||dids.has(d.id)||typeof d.n!=="string"||!d.n.trim()) continue;
+      const sl=(Array.isArray(d.sl)?d.sl:[]).slice(0,MAX_SLOTS).filter(isO).map(x=>({
+        o:(Array.isArray(x.o)?x.o:[]).filter(okId).slice(0,8),
+        s:Math.min(10,Math.max(1,parseInt(x.s)||3)),
+        r:okReps(x.r)?x.r:"8–12"})).filter(x=>x.o.length);
+      dids.add(d.id); days.push({id:d.id,n:d.n.trim().slice(0,24),sl});
+    }
+    if(!days.length) continue;
+    ids.add(p.id); out.push({id:p.id,n:p.n.trim().slice(0,30),days});
+  }
+  return out;
+}
+function progList(custom){
+  const mine=new Map((custom||[]).map(p=>[p.id,p]));
+  const out=PROGRAMS.map(b=>mine.has(b.id)?Object.assign({},mine.get(b.id),{sub:b.sub+" · изменена",edited:true}):b);
+  for(const p of custom||[]) if(!PROG_BASE[p.id]) out.push(Object.assign({},p,{sub:"Своя программа",own:true}));
+  return out;
+}
+function progMap(custom){const m=Object.create(null);for(const p of progList(custom))m[p.id]=p;return m}
+function rebuildPrograms(custom){for(const k of Object.keys(PRM))delete PRM[k];Object.assign(PRM,progMap(custom))}
+rebuildPrograms([]);
 const progDay = (p,d) => PRM[p]&&PRM[p].days.find(x=>x.id===d);
 /* the day after the last logged day of this program; a skipped day just waits its turn */
 function nextDay(progId,workouts){
@@ -347,7 +384,8 @@ function buildDay(progId,dayId,hidden,all){
   const have=new Set(all.map(e=>e.id)), used=new Set(), out=[];
   const ok=id=>have.has(id)&&!hidden.has(id)&&!used.has(id);
   for(const s of progDay(progId,dayId).sl){
-    const id=s.o.find(ok)||(all.find(e=>e.g===s.g&&ok(e.id))||{}).id;
+    const g=s.g||(all.find(e=>e.id===s.o[0])||{}).g;
+    const id=s.o.find(ok)||(g&&(all.find(e=>e.g===g&&ok(e.id))||{}).id);
     if(!id) continue;
     used.add(id); out.push({ex:id,s:s.s,r:s.r});
   }
@@ -357,6 +395,7 @@ let EXM = {}, ALL = [];
 function rebuildEx(){
   const custom = ((S.profile&&S.profile.custom)||[]).map(c=>Object.assign({t:CUSTOM_T[c.g]||1,z:"custom"},c));
   ALL = EX.concat(custom); EXM = Object.fromEntries(ALL.map(e=>[e.id,e]));
+  rebuildPrograms(S.profile&&S.profile.programs);
 }
 const isHidden = id => !!(S.profile&&S.profile.hidden&&S.profile.hidden.includes(id));
 const exTitle = e => e.ru ? `${e.n} · ${e.ru}` : e.n;
@@ -391,8 +430,8 @@ const LS="ironlevel.v1";
 const WEIGHT_MAX=1000, REPS_MAX=100;
 /* what comes out of storage is untrusted: one bad record must not stop the app from starting */
 function cleanLoaded(d){
-  const isO=v=>v&&typeof v==="object"&&!Array.isArray(v);
   const profile=isO(d)&&isO(d.profile)?d.profile:null;
+  if(profile) profile.programs=cleanPrograms(profile.programs);
   const workouts=isO(d)&&Array.isArray(d.workouts)?d.workouts.filter(w=>isO(w)&&typeof w.id==="string"&&typeof w.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(w.date)):[];
   return {profile,workouts};
 }
@@ -471,7 +510,7 @@ const draft = {
 };
 
 /* ---------- backup: profile + log as one JSON file; everything derived is recomputed on load ---------- */
-const BACKUP_V=1;
+const BACKUP_V=2;
 function makeBackup(profile,workouts,demo){
   return {app:"iron-level",version:BACKUP_V,exportedAt:new Date().toISOString(),profile,workouts:demo?[]:workouts};
 }
@@ -497,8 +536,10 @@ function parseBackup(text){
     hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
     custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&Object.hasOwn(GROUPS,c.g)).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
     createdAt:isDate(p.createdAt)?p.createdAt:today(),
-    program:PRM[p.program]?p.program:null
+    programs:cleanPrograms(p.programs)
   };
+  const prm=progMap(profile.programs);
+  profile.program=prm[p.program]?p.program:null;
   const seen=new Set(), workouts=[]; let skipped=0;
   for(const w of o.workouts){
     if(!isObj(w)||!safeId(w.id)||seen.has(w.id)||!isDate(w.date)||!Array.isArray(w.exercises)){skipped++;continue}
@@ -506,7 +547,7 @@ function parseBackup(text){
     const exercises=w.exercises.filter(e=>isObj(e)&&safeId(e.ex)&&Array.isArray(e.sets))
       .map(e=>({ex:e.ex,sets:e.sets.filter(isObj).map(s=>({w:String(s.w??"0"),r:String(s.r??"0")}))}));
     const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t;
-    if(str(w.prog)&&str(w.day)&&progDay(w.prog,w.day)){out.prog=w.prog;out.day=w.day}
+    if(str(w.prog)&&str(w.day)&&prm[w.prog]&&prm[w.prog].days.some(d=>d.id===w.day)){out.prog=w.prog;out.day=w.day}
     out.exercises=exercises;
     workouts.push(out);
   }
@@ -808,7 +849,7 @@ const INTRO = [
  {t:"Тренировка",p:"На вкладке «Тренировка» начни запись, добавь упражнения и вводи вес и повторы по подходам.",
   rows:[["Подсказка веса","по твоему прошлому разу в этом упражнении"],["PR","номер подхода меняется на PR, если это новый рекорд"],["Черновик","запись сохраняется, даже если закрыть приложение"]]},
  {t:"Программы",p:"В профиле выбери программу. Тогда на вкладке «Тренировка» появится день с готовыми упражнениями, подходами и повторами.",
-  rows:[["Фулбади","3 раза в неделю, для начала"],["Верх-низ","4 раза в неделю"],["Пуш-пул-ноги","3 или 6 раз в неделю"],["Следующий день","программа сама знает, какой день дальше"]]},
+  rows:[["Фулбади","3 раза в неделю, для начала"],["Верх-низ","4 раза в неделю"],["Пуш-пул-ноги","3 или 6 раз в неделю"],["Следующий день","программа сама знает, какой день дальше"],["Своя программа","«Профиль → Программа»: измени любую или собери свою, с днями, упражнениями, подходами и повторами"]]},
  {t:"Опыт и уровни",p:"За тренировки начисляется опыт. Уровни, рекорды и достижения считаются по журналу: удалишь тренировку, и опыт честно уменьшится.",
   rows:[["Подход","+"+XP.set+" XP"],["Рекорд в упражнении","+"+XP.pr+" XP"],["Тренировка завершена","+"+XP.done+" XP"],["Задание на сегодня","+"+XP.quest+" XP"],["Третья тренировка за неделю","+10%"]]},
  {t:"Ранги и отдых",p:"У каждой группы мышц свой ранг по силе. Группе, которую ты качал сегодня или вчера, лучше дать отдохнуть.",
@@ -959,10 +1000,10 @@ function planToday(){
 }
 function progCard(pl){
   const p=PRM[pl.pid], d=progDay(pl.pid,pl.day);
-  return `<div class="card"><div class="row between"><h2>${p.n}</h2><button class="link" data-tab="profile">Сменить</button></div>
-    <div class="seg" role="group" aria-label="День программы">${p.days.map(x=>`<button data-pday="${x.id}" aria-pressed="${x.id===pl.day}">${x.n}</button>`).join("")}</div>
-    <div class="list">${pl.list.map(x=>`<div class="li" style="min-height:40px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig">${x.s} × ${x.r}</span></div>`).join("")||'<p class="sub">В твоём зале нет тренажёров для этого дня. Включи их в «Мой зал».</p>'}</div>
-    <button class="btn primary block" data-act="start-prog" ${pl.list.length?"":"disabled"}>Начать: ${d.n}</button></div>`;
+  return `<div class="card"><div class="row between"><h2>${esc(p.n)}</h2><button class="link" data-tab="profile">Сменить</button></div>
+    <div class="${p.days.length>3?"chips":"seg"}" role="group" aria-label="День программы">${p.days.map(x=>`<button data-pday="${esc(x.id)}" aria-pressed="${x.id===pl.day}">${esc(x.n)}</button>`).join("")}</div>
+    <div class="list">${pl.list.map(x=>`<div class="li" style="min-height:40px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig">${x.s} × ${esc(x.r)}</span></div>`).join("")||(d.sl.length?'<p class="sub">В твоём зале нет тренажёров для этого дня. Включи их в «Мой зал».</p>':'<p class="sub">В этом дне пока нет упражнений. Добавь их в «Профиль → Программа → Изменить».</p>')}</div>
+    <button class="btn primary block" data-act="start-prog" ${pl.list.length?"":"disabled"}>Начать: ${esc(d.n)}</button></div>`;
 }
 function viewWorkout(){
   const a=S.active;
@@ -1016,6 +1057,7 @@ function exCard(ex,i){
 function viewSheet(){
   if(S.sheet.mode==="gym") return viewGymSheet();
   if(S.sheet.mode==="map") return viewMapSheet();
+  if(S.sheet.mode==="prog") return viewProgSheet();
   const q=(S.sheet.q||"").toLowerCase(), gsel=S.sheet.g||"all";
   const items=ALL.filter(e=>!isHidden(e.id)&&(gsel==="all"||e.g===gsel));
   const zones=ZONE_ORDER.filter(z=>items.some(e=>e.z===z));
@@ -1470,6 +1512,54 @@ function viewMapSheet(){
   </div></div>`;
 }
 function gymName(){return (S.profile&&S.profile.gym)||"Crunch Fit Lichtenberg"}
+/* ---------- program editor: any program, built-in or own, can be changed; a changed built-in has a way back ---------- */
+/* the editable copy lives in the profile; the first change of a built-in program copies it there */
+function pgEdit(){
+  const list=S.profile.programs||(S.profile.programs=[]); let p=list.find(x=>x.id===S.sheet.pid);
+  if(!p){const b=PROG_BASE[S.sheet.pid]; if(!b) return null;
+    p={id:b.id,n:b.n,days:b.days.map(d=>({id:d.id,n:d.n,sl:d.sl.map(x=>({o:x.o.slice(),s:x.s,r:x.r}))}))}; list.push(p)}
+  return p;
+}
+const pgDay = p => p.days.find(d=>d.id===S.sheet.day)||p.days[0];
+async function pgSave(){await store.saveProfile(S.profile);render()}
+function pgName(s){const e=EXM[s.o.find(id=>EXM[id])||s.o[0]];return e?{n:e.n,g:GROUPS[e.g]}:{n:"Упражнение не найдено",g:"оно удалено из твоего зала"}}
+function viewProgSheet(){
+  const sh=S.sheet, pr=PRM[sh.pid];
+  if(!pr){S.sheet=null;return ""}
+  const day=pr.days.find(d=>d.id===sh.day)||pr.days[0], di=pr.days.indexOf(day);
+  if(sh.pick) return viewProgPick(day);
+  const own=!!pr.own, edited=!!pr.edited;
+  const conf=(id,text,yes)=>sh.confirm===id?`<div class="well stack" style="gap:10px"><p class="sub" style="font-size:13px">${text}</p><div class="row"><button class="btn danger small" data-act="${yes}">Да</button><button class="btn ghost small" data-act="pg-no">Отмена</button></div></div>`:"";
+  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="pg-h" data-stop>
+    <div class="row between"><div><h2 id="pg-h">Программа</h2><p class="meta">${esc(pr.sub)}</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
+    <div class="field"><label for="pg-name">Название</label><input id="pg-name" name="program" maxlength="30" value="${esc(pr.n)}" autocomplete="off" spellcheck="false"></div>
+    <div class="chips" role="group" aria-label="Дни программы">${pr.days.map(d=>`<button data-act="pg-day" data-id="${esc(d.id)}" aria-pressed="${d.id===day.id}">${esc(d.n)}</button>`).join("")}${pr.days.length<MAX_DAYS?`<button data-act="pg-day-add" aria-pressed="false">Добавить день</button>`:""}</div>
+    <div class="field"><label for="pg-dn">Название дня</label><input id="pg-dn" name="day" maxlength="24" value="${esc(day.n)}" autocomplete="off" spellcheck="false"></div>
+    ${day.sl.map((s,i)=>{const nm=pgName(s);return `<div class="well stack" style="gap:10px">
+      <div><span class="t" style="font-weight:500;display:block">${esc(nm.n)}</span><span class="meta">${esc(nm.g)}</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label for="pgs-${i}">Подходов</label><input id="pgs-${i}" data-pgs="${i}" inputmode="numeric" maxlength="2" value="${s.s}" autocomplete="off"></div>
+        <div class="field"><label for="pgr-${i}">Повторов</label><input id="pgr-${i}" data-pgr="${i}" maxlength="8" value="${esc(s.r)}" autocomplete="off"></div></div>
+      <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn small" data-act="pg-up" data-i="${i}" ${i?"":"disabled"} aria-label="Поднять выше: ${esc(nm.n)}">Выше</button><button class="btn small" data-act="pg-down" data-i="${i}" ${i<day.sl.length-1?"":"disabled"} aria-label="Опустить ниже: ${esc(nm.n)}">Ниже</button><button class="btn small" data-act="pg-rep" data-i="${i}">Заменить</button><button class="btn small ghost" data-act="pg-rm" data-i="${i}" aria-label="Убрать: ${esc(nm.n)}">Убрать</button></div></div>`}).join("")||'<p class="sub" style="font-size:13px">В этом дне пока нет упражнений.</p>'}
+    <button class="btn primary" data-act="pg-add" ${day.sl.length<MAX_SLOTS?"":"disabled"} style="align-self:flex-start">Добавить упражнение</button>
+    <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn small" data-act="pg-left" ${di?"":"disabled"}>День раньше</button><button class="btn small" data-act="pg-right" ${di<pr.days.length-1?"":"disabled"}>День позже</button><button class="btn small ghost" data-act="pg-confirm" data-id="day" ${pr.days.length>1?"":"disabled"}>Убрать день</button></div>
+    ${conf("day","Убрать день «"+esc(day.n)+"»? Записанные тренировки останутся.","pg-day-del")}
+    ${own?`<button class="btn danger small" data-act="pg-confirm" data-id="del" style="align-self:flex-start">Удалить программу</button>`:edited?`<button class="btn small" data-act="pg-confirm" data-id="reset" style="align-self:flex-start">Вернуть исходную</button>`:""}
+    ${conf("del","Удалить программу «"+esc(pr.n)+"»? Записанные тренировки останутся.","pg-del-yes")}
+    ${conf("reset","Вернуть программу «"+esc(pr.n)+"» к исходной? Твои изменения пропадут.","pg-reset-yes")}
+  </div></div>`;
+}
+function viewProgPick(day){
+  const pk=S.sheet.pick, gsel=pk.g||"all", q=(pk.q||"").toLowerCase();
+  const items=ALL.filter(e=>!isHidden(e.id)&&(gsel==="all"||e.g===gsel)), zones=ZONE_ORDER.filter(z=>items.some(e=>e.z===z));
+  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="pk-h" data-stop>
+    <div class="row between"><div><h2 id="pk-h">${pk.slot==null?"Добавить в «"+esc(day.n)+"»":"Заменить упражнение"}</h2><p class="meta">${esc(gymName())} · ${items.length} в этом фильтре</p></div><button class="btn small" data-act="pg-pick-close">Назад</button></div>
+    <input class="search" id="pg-q" name="search" type="search" placeholder="Найти тренажёр или упражнение…" aria-label="Найти тренажёр или упражнение" value="${esc(pk.q||"")}" autocomplete="off" spellcheck="false">
+    <div class="chips" role="group" aria-label="Группа мышц">${[["all","Все"],...Object.entries(GROUPS)].map(([k,n])=>`<button data-act="pg-g" data-id="${k}" aria-pressed="${gsel===k}">${n}</button>`).join("")}</div>
+    ${zones.map(z=>`<section class="zone" data-zone><h3 class="meta" style="font-weight:500;padding-top:6px">${ZONES[z]}</h3><div class="list">${items.filter(e=>e.z===z).map(e=>{const hay=(e.n+" "+(e.ru||"")).toLowerCase();
+      return `<button class="li" data-act="pg-pick" data-id="${esc(e.id)}" data-name="${esc(hay)}" ${q&&!hay.includes(q)?"hidden":""}><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}</span></span><span class="fig sub" aria-hidden="true">${pk.slot==null?"Добавить":"Выбрать"}</span></button>`}).join("")}</div></section>`).join("")}
+  </div></div>`;
+}
 function viewGymSheet(){
   const cg=S.sheet.cg||"chest";
   const total=ALL.length, on=ALL.filter(e=>!isHidden(e.id)).length;
@@ -1611,7 +1701,8 @@ function viewProfile(){
       <button class="btn primary" data-act="p-save" style="align-self:flex-end">Сохранить</button>
     </div>
     <div class="card"><h2>Программа</h2>
-      <div class="seg prog-seg" role="group" aria-label="Программа тренировок">${[{id:"",n:"Без программы",sub:"Собираешь тренировку сам"}].concat(PROGRAMS).map(o=>`<button data-prog="${o.id}" aria-pressed="${(p.program||"")===o.id}"><span>${o.n}</span><span class="meta">${o.sub}</span></button>`).join("")}</div></div>
+      <div class="seg prog-seg" role="group" aria-label="Программа тренировок">${[{id:"",n:"Без программы",sub:"Собираешь тренировку сам"}].concat(Object.values(PRM)).map(o=>`<button data-prog="${esc(o.id)}" aria-pressed="${(p.program||"")===o.id}"><span>${esc(o.n)}</span><span class="meta">${esc(o.sub)}</span></button>`).join("")}</div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="pg-edit" ${PRM[p.program]?"":"disabled"}>Изменить</button><button class="btn small" data-act="pg-copy" ${PRM[p.program]&&(p.programs||[]).length<MAX_PROGS?"":"disabled"}>Сделать копию</button><button class="btn small" data-act="pg-new" ${(p.programs||[]).length<MAX_PROGS?"":"disabled"}>Новая программа</button></div></div>
     <div class="card"><div class="row between"><h2>Мой зал</h2><span class="meta num">${ALL.filter(e=>!isHidden(e.id)).length} из ${ALL.length}</span></div>
       <p class="sub" style="font-size:13px">Тренажёры ${esc(gymName())}: Hammer Strength, Life Fitness, кроссовер, свободные веса${(p.custom||[]).length?` и ${(p.custom||[]).length} ${plural((p.custom||[]).length,"свой","своих","своих")}`:""}. Убери то, чего нет в зале, и добавь недостающее.</p>
       <button class="btn" data-act="open-gym" style="align-self:flex-start">Настроить тренажёры</button></div>
@@ -1785,6 +1876,42 @@ document.addEventListener("click",async ev=>{
     case "coach-reset": S.coach=null; askCoach(); break;
     case "coach-stop": if(coachCtl) coachCtl.abort(); break;
     case "open-gym": S.sheet={mode:"gym",cg:"chest"}; render(); break;
+    case "pg-edit": if(PRM[S.profile.program]){S.sheet={mode:"prog",pid:S.profile.program,day:null,pick:null,confirm:null};render()} break;
+    case "pg-new": case "pg-copy":{
+      const list=S.profile.programs||(S.profile.programs=[]); if(list.length>=MAX_PROGS) break;
+      const src=a==="pg-copy"?PRM[S.profile.program]:null; if(a==="pg-copy"&&!src) break;
+      const id="p-"+uid(), day0="d-"+uid();
+      list.push(src?{id,n:(src.n+" (копия)").slice(0,30),days:src.days.map(d=>({id:d.id,n:d.n,sl:d.sl.map(x=>({o:x.o.slice(),s:x.s,r:x.r}))}))}
+                   :{id,n:"Моя программа",days:[{id:day0,n:"День 1",sl:[]}]});
+      S.profile.program=id; S.pday=null; S.sheet={mode:"prog",pid:id,day:null,pick:null,confirm:null};
+      await pgSave(); break}
+    case "pg-day": S.sheet.day=t.dataset.id; S.sheet.confirm=null; render(); break;
+    case "pg-day-add":{const p=pgEdit(); if(!p||p.days.length>=MAX_DAYS) break;
+      const d={id:"d-"+uid(),n:"День "+(p.days.length+1),sl:[]}; p.days.push(d); S.sheet.day=d.id; await pgSave(); break}
+    case "pg-confirm": S.sheet.confirm=t.dataset.id; render(); break;
+    case "pg-no": S.sheet.confirm=null; render(); break;
+    case "pg-day-del":{const p=pgEdit(); if(!p||p.days.length<2) break;
+      const i=p.days.indexOf(pgDay(p)); p.days.splice(i,1); S.sheet.day=null; S.sheet.confirm=null; S.pday=null; await pgSave(); break}
+    case "pg-left": case "pg-right":{const p=pgEdit(); if(!p) break;
+      const i=p.days.indexOf(pgDay(p)), j=i+(a==="pg-left"?-1:1); if(j<0||j>=p.days.length) break;
+      [p.days[i],p.days[j]]=[p.days[j],p.days[i]]; await pgSave(); break}
+    case "pg-up": case "pg-down":{const p=pgEdit(); if(!p) break;
+      const d=pgDay(p), i=+t.dataset.i, j=i+(a==="pg-up"?-1:1); if(!d.sl[i]||!d.sl[j]) break;
+      [d.sl[i],d.sl[j]]=[d.sl[j],d.sl[i]]; await pgSave(); break}
+    case "pg-rm":{const p=pgEdit(); if(!p) break; pgDay(p).sl.splice(+t.dataset.i,1); await pgSave(); break}
+    case "pg-add": S.sheet.pick={slot:null,g:"all",q:""}; render(); break;
+    case "pg-rep": S.sheet.pick={slot:+t.dataset.i,g:"all",q:""}; render(); break;
+    case "pg-pick-close": S.sheet.pick=null; render(); break;
+    case "pg-g": S.sheet.pick.g=t.dataset.id; render(); break;
+    case "pg-pick":{const p=pgEdit(); if(!p||!EXM[t.dataset.id]) break; const d=pgDay(p), id=t.dataset.id, slot=S.sheet.pick.slot;
+      if(slot==null){if(d.sl.length>=MAX_SLOTS) break; d.sl.push({o:[id],s:3,r:"8–12"})}
+      else if(d.sl[slot]) d.sl[slot].o=[id];
+      S.sheet.pick=null; await pgSave(); break}
+    case "pg-del-yes":{const id=S.sheet.pid;
+      S.profile.programs=(S.profile.programs||[]).filter(x=>x.id!==id);
+      if(S.profile.program===id) S.profile.program=null; S.pday=null; S.sheet=null; await pgSave(); toast("Программа удалена"); break}
+    case "pg-reset-yes":{const id=S.sheet.pid;
+      S.profile.programs=(S.profile.programs||[]).filter(x=>x.id!==id); S.sheet.day=null; S.sheet.confirm=null; S.pday=null; await pgSave(); toast("Исходная программа вернулась"); break}
     case "add-custom":{const n=($("#c-name").value||"").trim(); if(!n){toast("Введи название тренажёра");$("#c-name").focus();return}
       S.profile.custom=(S.profile.custom||[]).concat([{id:"c-"+uid(),n,g:S.sheet.cg||"chest"}]); await store.saveProfile(S.profile); render(); toast(n+": добавлен"); break}
     case "rm-custom":{ev.preventDefault();const id=t.dataset.id;S.profile.custom=(S.profile.custom||[]).filter(c=>c.id!==id);await store.saveProfile(S.profile);render();break}
@@ -1793,6 +1920,16 @@ document.addEventListener("click",async ev=>{
 document.addEventListener("change",async ev=>{
   const el=ev.target;
   if(el.id==="imp-file"){await readImportFile(el);return}
+  if(S.sheet&&S.sheet.mode==="prog"){
+    if(el.id==="pg-name"||el.id==="pg-dn"){const p=pgEdit(), v=el.value.trim();
+      if(p&&v){if(el.id==="pg-name")p.n=v.slice(0,30);else pgDay(p).n=v.slice(0,24)}
+      await pgSave(); return}
+    if(el.dataset.pgs!==undefined||el.dataset.pgr!==undefined){const p=pgEdit(); if(!p){return}
+      const x=pgDay(p).sl[+(el.dataset.pgs??el.dataset.pgr)];
+      if(x){if(el.dataset.pgs!==undefined){const n=parseInt(el.value); if(n>=1&&n<=10)x.s=n}
+            else{const r=el.value.trim().replace(/\s+/g," "); if(okReps(r))x.r=r}}
+      await pgSave(); return}
+  }
   if(el.id==="map-file"){await readMapFile(el);return}
   /* typed angle or size: "150%", "45°" and "1,5" all read as numbers; anything else puts the old value back */
   if((el.id==="m-rot"||el.id==="m-size")&&S.sheet&&S.sheet.edit&&selM()){
@@ -1828,6 +1965,7 @@ document.addEventListener("input",ev=>{
     if(!S.map) S.map=GYM_MAP.machines.map(m=>({...m}));
     const m=selM(), v=el.value.trim(); if(v) m.n=v.slice(0,40); else delete m.n; mapStore.set(S.map);
     const h=$("#m-title"); if(h) h.textContent=mName(m); return}
+  if(el.id==="pg-q"&&S.sheet&&S.sheet.pick){S.sheet.pick.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll('[data-act="pg-pick"]').forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll('[data-act="pg-pick"]')].some(b=>!b.hidden)})}
   if(el.id==="lib-q"){S.sheet.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll("[data-add-ex]").forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll("[data-add-ex]")].some(b=>!b.hidden)})}
 });
 
@@ -1837,7 +1975,7 @@ window.ironLevelCore={cleanLoaded,GROUP_KEYS,XP,levelNeed,
 window.ironLevelBackup={makeBackup,parseBackup};
 window.ironLevelMap={spots:GYM_MAP.machines.filter(canTap).map(m=>({id:m.id,ex:mEx(m)})),kinds:Object.keys(GM_KIND),icons:Object.keys(GM_ICON),add:GM_ADD,models:GYM_MODELS,kindEx:Object.fromEntries(Object.entries(GM_KIND).map(([k,v])=>[k,v.ex||[]])),parseMap,makeMapFile,machines:GYM_MAP.machines};
 window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
-window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
+window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,cleanPrograms,progList,rebuildPrograms,MAX_PROGS,MAX_DAYS,MAX_SLOTS,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
 
 /* ---------- boot ---------- */
 (async function boot(){
