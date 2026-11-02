@@ -388,6 +388,14 @@ function announce(t){const el=$("#live");if(el){el.textContent="";setTimeout(()=
 
 /* ---------- storage: private db subtree, falls back to this browser ---------- */
 const LS="ironlevel.v1";
+const WEIGHT_MAX=1000, REPS_MAX=100;
+/* what comes out of storage is untrusted: one bad record must not stop the app from starting */
+function cleanLoaded(d){
+  const isO=v=>v&&typeof v==="object"&&!Array.isArray(v);
+  const profile=isO(d)&&isO(d.profile)?d.profile:null;
+  const workouts=isO(d)&&Array.isArray(d.workouts)?d.workouts.filter(w=>isO(w)&&typeof w.id==="string"&&typeof w.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(w.date)):[];
+  return {profile,workouts};
+}
 const store = {
   mode:"local", db:null, uid:null,
   async init(){
@@ -409,10 +417,22 @@ const store = {
         return {profile:p.exists?p.data().profile:null, workouts:ws.docs.map(d=>d.data())};
       }catch(e){ this.mode="local"; }
     }
-    try{const raw=localStorage.getItem(LS);if(raw)return JSON.parse(raw)}catch(e){}
+    let raw=null;
+    try{raw=localStorage.getItem(LS)}catch(e){this.blocked=true}
+    if(raw){
+      try{return cleanLoaded(JSON.parse(raw))}
+      catch(e){
+        /* unreadable data must never look like a new user: keep the raw text, tell the user, let them restore a backup */
+        try{if(!localStorage.getItem(LS+".broken"))localStorage.setItem(LS+".broken",raw)}catch(e2){}
+        this.broken=true;
+      }
+    }
     return {profile:null,workouts:[]};
   },
-  local(){try{localStorage.setItem(LS,JSON.stringify({profile:S.profile,workouts:S.workouts}))}catch(e){}},
+  local(){
+    try{localStorage.setItem(LS,JSON.stringify({profile:S.profile,workouts:S.workouts}));return true}
+    catch(e){toast("Не сохранилось: в браузере нет места или закрыт доступ. Сохрани резервную копию в «Профиль → Данные»");return false}
+  },
   async saveProfile(p){
     if(this.mode==="db"){try{await this.profRef().set({profile:p});return}catch(e){toast("Профиль не сохранился. Проверь сеть и сохрани ещё раз")}}
     this.local();
@@ -622,6 +642,9 @@ function muscleFill(v){
 function lagging(g){let m=null;for(const k of GROUP_KEYS){if(m==null||g[k]<g[m])m=k}return m}
 function streakAt(wc,wk){let n=0,k=wk;while((wc[k]||0)>=2){n++;k=addDays(k,-7)}return n}
 
+/* a press with a barbell or on the plate-loaded bench counts for the bench achievements */
+const BENCH_IDS = ["bench","hs-bench"];
+const benchW = c => Math.max(0,...BENCH_IDS.map(id=>c.bestW[id]||0));
 // each achievement: its progress [have, need], so a locked one shows a true-ratio track
 const ACH = [
  {id:"first",t:"Первая тренировка",p:c=>[c.workouts,1]},
@@ -634,8 +657,8 @@ const ACH = [
  {id:"vol100",t:"100 тонн поднято",p:c=>[c.volume/1000,100],u:"т"},
  {id:"st4",t:"4 недели подряд",p:c=>[c.streak,4],u:"нед"},
  {id:"st12",t:"12 недель подряд",p:c=>[c.streak,12],u:"нед"},
- {id:"b100",t:"Жим лёжа 100 кг",p:c=>[c.bestW.bench||0,100],u:"кг"},
- {id:"bbw",t:"Жим лёжа своего веса",p:c=>[c.bestW.bench||0,c.bw],u:"кг"},
+ {id:"b100",t:"Жим лёжа 100 кг",p:c=>[benchW(c),100],u:"кг"},
+ {id:"bbw",t:"Жим лёжа своего веса",p:c=>[benchW(c),c.bw],u:"кг"},
  {id:"all6",t:"Все 6 групп за неделю",p:c=>[GROUP_KEYS.filter(k=>(c.weekGroups||{})[k]).length,6]},
  {id:"l5",t:"Уровень 5",p:c=>[c.level,5]},
  {id:"l10",t:"Уровень 10",p:c=>[c.level,10]}
@@ -964,7 +987,7 @@ function viewWorkout(){
   return `<div class="stack">
     <div class="titlerow"><div class="grow"><h1>Тренировка</h1><p class="sub" style="font-size:13px">${relDate(a.date)} · ${esc(gymName())} · идёт запись</p></div><span class="num" style="font-weight:600" id="xp-now">+${nSets*XP.set} XP</span></div>
     ${a.exercises.length?"":`<div class="card"><p class="sub">Добавь первое упражнение: подскажу вес по прошлому разу.</p></div>`}
-    ${a.exercises.map((ex,i)=>exCard(ex,i)).join("")}
+    ${a.exercises.map((ex,i)=>EXM[ex.ex]?exCard(ex,i):"").join("")}
     <div class="grid2"><button class="btn" data-act="open-lib">Добавить упражнение</button><button class="btn" data-act="open-map">Карта зала</button></div>
     <div class="grid2">
       <button class="btn ${S.confirm==="cancel"?"danger":"ghost"}" data-act="${S.confirm==="cancel"?"cancel-yes":"cancel"}">${S.confirm==="cancel"?"Удалить запись":"Отменить"}</button>
@@ -1736,7 +1759,10 @@ document.addEventListener("click",async ev=>{
     case "cancel": S.confirm="cancel"; render(); break;
     case "cancel-yes": S.active=null; S.confirm=null; draft.set(null); render(); toast("Запись удалена"); break;
     case "finish":{
-      const w=S.active; w.exercises=w.exercises.map(e=>({ex:e.ex,sets:e.sets.filter(s=>parseInt(s.r)>0).map(s=>({w:String(s.w||"0").replace(",","."),r:String(parseInt(s.r)||0)}))})).filter(e=>e.sets.length);
+      const w=S.active; const raw=w.exercises.filter(e=>EXM[e.ex]);
+      if(raw.some(e=>e.sets.some(s=>parseInt(s.r)>REPS_MAX||(parseFloat(String(s.w).replace(",","."))||0)>WEIGHT_MAX||(parseFloat(String(s.w).replace(",","."))||0)<0))){
+        toast("Проверь числа: вес не больше "+WEIGHT_MAX+" кг, повторов не больше "+REPS_MAX);return}
+      w.exercises=raw.map(e=>({ex:e.ex,sets:e.sets.filter(s=>parseInt(s.r)>0).map(s=>({w:String(s.w||"0").replace(",","."),r:String(parseInt(s.r)||0)}))})).filter(e=>e.sets.length);
       if(!w.exercises.length){toast("Добавь хотя бы один подход с повторами");return}
       if(S.demo){S.demo=false;S.workouts=[]}
       S.summaryLevelBefore=derive().level;
@@ -1805,6 +1831,9 @@ document.addEventListener("input",ev=>{
   if(el.id==="lib-q"){S.sheet.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll("[data-add-ex]").forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll("[data-add-ex]")].some(b=>!b.hidden)})}
 });
 
+window.ironLevelCore={cleanLoaded,GROUP_KEYS,XP,levelNeed,
+  /* derive() on given data, without touching the live state */
+  derive:(profile,workouts)=>{const keep=[S.profile,S.workouts];S.profile=profile;S.workouts=workouts;rebuildEx();try{return derive()}finally{S.profile=keep[0];S.workouts=keep[1];rebuildEx()}}};
 window.ironLevelBackup={makeBackup,parseBackup};
 window.ironLevelMap={spots:GYM_MAP.machines.filter(canTap).map(m=>({id:m.id,ex:mEx(m)})),kinds:Object.keys(GM_KIND),icons:Object.keys(GM_ICON),add:GM_ADD,models:GYM_MODELS,kindEx:Object.fromEntries(Object.entries(GM_KIND).map(([k,v])=>[k,v.ex||[]])),parseMap,makeMapFile,machines:GYM_MAP.machines};
 window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
@@ -1815,10 +1844,17 @@ window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g
   await store.init();
   const data=await store.load();
   S.profile=data.profile; S.workouts=data.workouts||[];
-  const dr=draft.get(); if(dr&&dr.exercises) S.active=dr;
+  rebuildEx();
+  const dr=draft.get();
+  if(dr&&Array.isArray(dr.exercises)){
+    dr.exercises=dr.exercises.filter(e=>e&&EXM[e.ex]&&Array.isArray(e.sets));
+    S.active=dr;
+  }
   if(S.profile&&!introSeen.get()) S.intro=0;
   S.map=mapStore.get();
   render();
+  if(store.broken) toast("Данные в браузере повреждены. Копия сохранена. Загрузи резервную копию: «Восстановить из файла»");
+  else if(store.blocked) toast("Браузер не даёт хранить данные. Приложение не сможет сохранять тренировки");
 })();
 })();
 </script>
