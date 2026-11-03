@@ -13,9 +13,12 @@
 <title>Iron Level</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#0d0d0c">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="preload" href="fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Inter, variable 400-600, hosted here: works offline and sends nothing to Google (fonts/README.txt) */
+@font-face{font-family:"Inter";font-style:normal;font-weight:400 600;font-display:swap;src:url(fonts/inter-cyrillic.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"Inter";font-style:normal;font-weight:400 600;font-display:swap;src:url(fonts/inter-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+</style>
 <style>
 /* Style: true-black-flat (seed 348780101). Face: rubber-floor near-black ground; the one data hue is the 15 kg plate yellow.
    Layout: one 480px phone column, 16px gutters, one 14px gap everywhere; elevation by lightness alone (ground → surface → raised); bottom bar of four destinations. */
@@ -194,6 +197,55 @@ button.li:hover{background:var(--raised)}
 .sheet{width:100%;max-width:480px;max-height:86vh;overflow:auto;overscroll-behavior:contain;background:var(--surface);border-radius:24px 24px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .sheet > *{flex:none}
 .search{height:44px;border-radius:999px;border:1px solid var(--control);background:var(--ground);padding:0 16px;width:100%;font-size:16px}
+/* calendar: a mark per kind of day. done = filled, record = the data yellow, plan = ring, missed = dashed ring, rest = bare number */
+.nxs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;padding:4px;margin:-4px}
+.nxs::-webkit-scrollbar{display:none}
+.nx{flex:none;position:relative;width:76px;height:96px;border-radius:20px;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 6px;transition:background-color .15s}
+.nx .w{font-size:12px;font-weight:500;color:var(--faint)}
+.nx .n{font-size:24px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.nx .l{font-size:11px;font-weight:500;color:var(--muted);text-align:center;line-height:1.25;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nx.plan{background:var(--raised)}
+.nx.plan .l{color:var(--text)}
+.nx.done{background:var(--text);color:var(--on-primary)}
+.nx.done .w,.nx.done .l{color:var(--on-primary)}
+.nx.pr::before,.cd.pr::before{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.nx.pr::before{top:10px;left:12px}
+.cd.pr::before{top:3px;left:calc(50% + 10px);box-shadow:0 0 0 2px var(--surface)}
+.nx.rest .n{color:var(--muted)}
+.nx.today::after,.cd.today::after{content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.nx.today::after{top:10px;right:12px}
+.nx.done.today::after,.nx.done.pr.today::after{background:var(--on-primary)}
+.nx[aria-pressed="true"],.cd[aria-pressed="true"]{outline:2px solid var(--muted);outline-offset:2px}
+.cal-h{display:flex;align-items:center;gap:4px}
+.cal-h h2{flex:1;text-align:center}
+.cal-h .btn{width:44px;padding:0;flex:none}
+.cal-h .btn svg{width:20px;height:20px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));row-gap:2px}
+.cal .wd{font-size:12px;font-weight:500;color:var(--faint);text-align:center;padding:2px 0 6px}
+.cd{position:relative;height:48px;display:flex;align-items:center;justify-content:center;border-radius:14px}
+.cd .cn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--muted)}
+.cd.out{visibility:hidden}
+.cd.done .cn{background:var(--text);color:var(--on-primary);font-weight:600}
+.cd.plan .cn{color:var(--text);border:1.5px solid var(--muted)}
+.cd.miss .cn{border:1.5px dashed var(--chart-off)}
+.cd.today .cn{font-weight:700}
+.cd.today:not(.done):not(.plan) .cn{color:var(--text)}
+.cd.today::after{bottom:1px}
+.cd:hover .cn{background-color:var(--raised)}
+.cd.done:hover .cn{background-color:var(--text)}
+.cal-key{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.cal-key span{display:inline-flex;align-items:center;gap:7px}
+.cal-key i{width:14px;height:14px;border-radius:50%;display:inline-block}
+.cal-key .k-done{background:var(--text)}
+.cal-key .k-pr{background:var(--text);position:relative}
+.cal-key .k-pr::after{content:"";position:absolute;top:-2px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
+.cal-key .k-plan{border:1.5px solid var(--muted)}
+.cal-key .k-miss{border:1.5px dashed var(--chart-off)}
+.wdsel{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wdsel button{height:44px;border-radius:999px;font-size:13px;font-weight:500;color:var(--faint);background:var(--raised);transition:color .15s,background-color .15s}
+.wdsel button:hover{color:var(--text)}
+.wdsel button[aria-pressed="true"]{background:var(--text);color:var(--on-primary)}
+.day-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;overscroll-behavior-x:contain}
 .chips::-webkit-scrollbar{display:none}
 .chips button{flex:none;height:36px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:500;color:var(--faint);background:var(--raised)}
@@ -201,7 +253,7 @@ button.li:hover{background:var(--raised)}
 
 /* bottom bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--ground);box-shadow:inset 0 1px 0 var(--rule);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
-.tabs-in{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs-in{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
 .tab{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:52px;justify-content:center;font-size:11px;font-weight:500;color:var(--faint);transition:color .15s}
 .tab svg{width:22px;height:22px}
 .tab:hover,.tab[aria-current="page"]{color:var(--text)}
@@ -331,8 +383,45 @@ const PROGRAMS = [
   {id:"pull",n:"Пул",sl:[sl(["pull","lf-lat","lat","hs-flat"],BASE),sl(["row","hs-lrow","lf-row","cab-row"],BASE),sl(["cab-row","lf-row","dbrow"],ISO),sl(["cab-face","lf-fly"],ABS),sl(["curl","lf-bic","cab-curl"],ISO),sl(["hammer","cab-curl"],ISO)]},
   {id:"legs",n:"Ноги",sl:[sl(["squat","smith","hs-hack"],BASE),sl(["rdl","lf-scurl"],BASE),sl(["hs-legp","lf-legp","press"],ISO),sl(["lf-scurl"],ISO),sl(["hs-calf"],ISO),sl(["hang","lf-abdc","cable-cr"],ABS)]}]}
 ];
-/* no prototype, so ids from a backup file like "constructor" never match */
-const PRM = Object.assign(Object.create(null), Object.fromEntries(PROGRAMS.map(p=>[p.id,p])));
+/* PRM: every program in use, built-in or the user's own (profile.programs). A user program with a built-in id replaces
+   that built-in (an edited copy); any other id is a program of their own. No prototype, so ids like "constructor" never match. */
+const PROG_BASE = Object.assign(Object.create(null), Object.fromEntries(PROGRAMS.map(p=>[p.id,p])));
+const PRM = Object.create(null);
+const MAX_PROGS=12, MAX_DAYS=8, MAX_SLOTS=14;
+const isO = v => !!v && typeof v==="object" && !Array.isArray(v);
+const okId = v => typeof v==="string" && /^[\w-]{1,64}$/.test(v);
+const okReps = v => typeof v==="string" && /^[\d–+\- ]{1,8}$/.test(v) && /\d/.test(v);
+/* programs from storage or a backup file are untrusted: names end up in HTML, ids in attributes */
+function cleanPrograms(a){
+  if(!Array.isArray(a)) return [];
+  const out=[], ids=new Set();
+  for(const p of a){
+    if(out.length>=MAX_PROGS) break;
+    if(!isO(p)||!okId(p.id)||ids.has(p.id)||typeof p.n!=="string"||!p.n.trim()||!Array.isArray(p.days)) continue;
+    const days=[], dids=new Set();
+    for(const d of p.days){
+      if(days.length>=MAX_DAYS) break;
+      if(!isO(d)||!okId(d.id)||dids.has(d.id)||typeof d.n!=="string"||!d.n.trim()) continue;
+      const sl=(Array.isArray(d.sl)?d.sl:[]).slice(0,MAX_SLOTS).filter(isO).map(x=>({
+        o:(Array.isArray(x.o)?x.o:[]).filter(okId).slice(0,8),
+        s:Math.min(10,Math.max(1,parseInt(x.s)||3)),
+        r:okReps(x.r)?x.r:"8–12"})).filter(x=>x.o.length);
+      dids.add(d.id); days.push({id:d.id,n:d.n.trim().slice(0,24),sl});
+    }
+    if(!days.length) continue;
+    ids.add(p.id); out.push({id:p.id,n:p.n.trim().slice(0,30),days});
+  }
+  return out;
+}
+function progList(custom){
+  const mine=new Map((custom||[]).map(p=>[p.id,p]));
+  const out=PROGRAMS.map(b=>mine.has(b.id)?Object.assign({},mine.get(b.id),{sub:b.sub+" · изменена",edited:true}):b);
+  for(const p of custom||[]) if(!PROG_BASE[p.id]) out.push(Object.assign({},p,{sub:"Своя программа",own:true}));
+  return out;
+}
+function progMap(custom){const m=Object.create(null);for(const p of progList(custom))m[p.id]=p;return m}
+function rebuildPrograms(custom){for(const k of Object.keys(PRM))delete PRM[k];Object.assign(PRM,progMap(custom))}
+rebuildPrograms([]);
 const progDay = (p,d) => PRM[p]&&PRM[p].days.find(x=>x.id===d);
 /* the day after the last logged day of this program; a skipped day just waits its turn */
 function nextDay(progId,workouts){
@@ -347,7 +436,8 @@ function buildDay(progId,dayId,hidden,all){
   const have=new Set(all.map(e=>e.id)), used=new Set(), out=[];
   const ok=id=>have.has(id)&&!hidden.has(id)&&!used.has(id);
   for(const s of progDay(progId,dayId).sl){
-    const id=s.o.find(ok)||(all.find(e=>e.g===s.g&&ok(e.id))||{}).id;
+    const g=s.g||(all.find(e=>e.id===s.o[0])||{}).g;
+    const id=s.o.find(ok)||(g&&(all.find(e=>e.g===g&&ok(e.id))||{}).id);
     if(!id) continue;
     used.add(id); out.push({ex:id,s:s.s,r:s.r});
   }
@@ -357,6 +447,7 @@ let EXM = {}, ALL = [];
 function rebuildEx(){
   const custom = ((S.profile&&S.profile.custom)||[]).map(c=>Object.assign({t:CUSTOM_T[c.g]||1,z:"custom"},c));
   ALL = EX.concat(custom); EXM = Object.fromEntries(ALL.map(e=>[e.id,e]));
+  rebuildPrograms(S.profile&&S.profile.programs);
 }
 const isHidden = id => !!(S.profile&&S.profile.hidden&&S.profile.hidden.includes(id));
 const exTitle = e => e.ru ? `${e.n} · ${e.ru}` : e.n;
@@ -388,6 +479,14 @@ function announce(t){const el=$("#live");if(el){el.textContent="";setTimeout(()=
 
 /* ---------- storage: private db subtree, falls back to this browser ---------- */
 const LS="ironlevel.v1";
+const WEIGHT_MAX=1000, REPS_MAX=100;
+/* what comes out of storage is untrusted: one bad record must not stop the app from starting */
+function cleanLoaded(d){
+  const profile=isO(d)&&isO(d.profile)?d.profile:null;
+  if(profile){profile.programs=cleanPrograms(profile.programs); const sc=cleanSchedule(profile.schedule); if(sc) profile.schedule=sc; else delete profile.schedule}
+  const workouts=isO(d)&&Array.isArray(d.workouts)?d.workouts.filter(w=>isO(w)&&typeof w.id==="string"&&typeof w.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(w.date)):[];
+  return {profile,workouts};
+}
 const store = {
   mode:"local", db:null, uid:null,
   async init(){
@@ -409,10 +508,22 @@ const store = {
         return {profile:p.exists?p.data().profile:null, workouts:ws.docs.map(d=>d.data())};
       }catch(e){ this.mode="local"; }
     }
-    try{const raw=localStorage.getItem(LS);if(raw)return JSON.parse(raw)}catch(e){}
+    let raw=null;
+    try{raw=localStorage.getItem(LS)}catch(e){this.blocked=true}
+    if(raw){
+      try{return cleanLoaded(JSON.parse(raw))}
+      catch(e){
+        /* unreadable data must never look like a new user: keep the raw text, tell the user, let them restore a backup */
+        try{if(!localStorage.getItem(LS+".broken"))localStorage.setItem(LS+".broken",raw)}catch(e2){}
+        this.broken=true;
+      }
+    }
     return {profile:null,workouts:[]};
   },
-  local(){try{localStorage.setItem(LS,JSON.stringify({profile:S.profile,workouts:S.workouts}))}catch(e){}},
+  local(){
+    try{localStorage.setItem(LS,JSON.stringify({profile:S.profile,workouts:S.workouts}));return true}
+    catch(e){toast("Не сохранилось: в браузере нет места или закрыт доступ. Сохрани резервную копию в «Профиль → Данные»");return false}
+  },
   async saveProfile(p){
     if(this.mode==="db"){try{await this.profRef().set({profile:p});return}catch(e){toast("Профиль не сохранился. Проверь сеть и сохрани ещё раз")}}
     this.local();
@@ -451,7 +562,7 @@ const draft = {
 };
 
 /* ---------- backup: profile + log as one JSON file; everything derived is recomputed on load ---------- */
-const BACKUP_V=1;
+const BACKUP_V=3;
 function makeBackup(profile,workouts,demo){
   return {app:"iron-level",version:BACKUP_V,exportedAt:new Date().toISOString(),profile,workouts:demo?[]:workouts};
 }
@@ -477,8 +588,11 @@ function parseBackup(text){
     hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
     custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&Object.hasOwn(GROUPS,c.g)).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
     createdAt:isDate(p.createdAt)?p.createdAt:today(),
-    program:PRM[p.program]?p.program:null
+    programs:cleanPrograms(p.programs)
   };
+  const prm=progMap(profile.programs);
+  profile.program=prm[p.program]?p.program:null;
+  const sched=cleanSchedule(p.schedule); if(sched) profile.schedule=sched;
   const seen=new Set(), workouts=[]; let skipped=0;
   for(const w of o.workouts){
     if(!isObj(w)||!safeId(w.id)||seen.has(w.id)||!isDate(w.date)||!Array.isArray(w.exercises)){skipped++;continue}
@@ -486,7 +600,7 @@ function parseBackup(text){
     const exercises=w.exercises.filter(e=>isObj(e)&&safeId(e.ex)&&Array.isArray(e.sets))
       .map(e=>({ex:e.ex,sets:e.sets.filter(isObj).map(s=>({w:String(s.w??"0"),r:String(s.r??"0")}))}));
     const out={id:w.id,date:w.date}; if(typeof w.t==="number") out.t=w.t;
-    if(str(w.prog)&&str(w.day)&&progDay(w.prog,w.day)){out.prog=w.prog;out.day=w.day}
+    if(str(w.prog)&&str(w.day)&&prm[w.prog]&&prm[w.prog].days.some(d=>d.id===w.day)){out.prog=w.prog;out.day=w.day}
     out.exercises=exercises;
     workouts.push(out);
   }
@@ -622,6 +736,9 @@ function muscleFill(v){
 function lagging(g){let m=null;for(const k of GROUP_KEYS){if(m==null||g[k]<g[m])m=k}return m}
 function streakAt(wc,wk){let n=0,k=wk;while((wc[k]||0)>=2){n++;k=addDays(k,-7)}return n}
 
+/* a press with a barbell or on the plate-loaded bench counts for the bench achievements */
+const BENCH_IDS = ["bench","hs-bench"];
+const benchW = c => Math.max(0,...BENCH_IDS.map(id=>c.bestW[id]||0));
 // each achievement: its progress [have, need], so a locked one shows a true-ratio track
 const ACH = [
  {id:"first",t:"Первая тренировка",p:c=>[c.workouts,1]},
@@ -634,8 +751,8 @@ const ACH = [
  {id:"vol100",t:"100 тонн поднято",p:c=>[c.volume/1000,100],u:"т"},
  {id:"st4",t:"4 недели подряд",p:c=>[c.streak,4],u:"нед"},
  {id:"st12",t:"12 недель подряд",p:c=>[c.streak,12],u:"нед"},
- {id:"b100",t:"Жим лёжа 100 кг",p:c=>[c.bestW.bench||0,100],u:"кг"},
- {id:"bbw",t:"Жим лёжа своего веса",p:c=>[c.bestW.bench||0,c.bw],u:"кг"},
+ {id:"b100",t:"Жим лёжа 100 кг",p:c=>[benchW(c),100],u:"кг"},
+ {id:"bbw",t:"Жим лёжа своего веса",p:c=>[benchW(c),c.bw],u:"кг"},
  {id:"all6",t:"Все 6 групп за неделю",p:c=>[GROUP_KEYS.filter(k=>(c.weekGroups||{})[k]).length,6]},
  {id:"l5",t:"Уровень 5",p:c=>[c.level,5]},
  {id:"l10",t:"Уровень 10",p:c=>[c.level,10]}
@@ -755,13 +872,14 @@ function figure(sex,g,opt){
 const ICONS = {
  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
  workout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg>',
+ calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
  progress:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
  profile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
 };
 function renderTabs(){
   const t=$("#tabs"); t.hidden=!S.profile||S.intro!=null;
   if(t.hidden) return;
-  const items=[["home","Персонаж"],["workout","Тренировка"],["progress","Прогресс"],["profile","Профиль"]];
+  const items=[["home","Персонаж"],["workout","Тренировка"],["calendar","Календарь"],["progress","Прогресс"],["profile","Профиль"]];
   t.innerHTML=`<div class="tabs-in">${items.map(([k,n])=>`<button class="tab" data-tab="${k}" ${S.tab===k&&!S.summary?'aria-current="page"':''}>${ICONS[k]}${k==="workout"&&S.active?'<span class="live" aria-hidden="true"></span>':''}<span>${n}${k==="workout"&&S.active?'<span class="sr"> (идёт запись)</span>':''}</span></button>`).join("")}</div>`;
 }
 let D=null;
@@ -771,7 +889,7 @@ function render(){
   const app=$("#app");
   if(!S.profile){app.innerHTML=viewOnboard();renderTabs();return}
   if(S.intro!=null){app.innerHTML=viewIntro();renderTabs();return}
-  const html = S.summary ? viewSummary() : S.tab==="home"?viewHome():S.tab==="workout"?viewWorkout():S.tab==="progress"?viewProgress():viewProfile();
+  const html = S.summary ? viewSummary() : S.tab==="home"?viewHome():S.tab==="workout"?viewWorkout():S.tab==="calendar"?viewCalendar():S.tab==="progress"?viewProgress():viewProfile();
   app.innerHTML = html + (S.sheet?viewSheet():"");
   renderTabs();
 }
@@ -785,7 +903,9 @@ const INTRO = [
  {t:"Тренировка",p:"На вкладке «Тренировка» начни запись, добавь упражнения и вводи вес и повторы по подходам.",
   rows:[["Подсказка веса","по твоему прошлому разу в этом упражнении"],["PR","номер подхода меняется на PR, если это новый рекорд"],["Черновик","запись сохраняется, даже если закрыть приложение"]]},
  {t:"Программы",p:"В профиле выбери программу. Тогда на вкладке «Тренировка» появится день с готовыми упражнениями, подходами и повторами.",
-  rows:[["Фулбади","3 раза в неделю, для начала"],["Верх-низ","4 раза в неделю"],["Пуш-пул-ноги","3 или 6 раз в неделю"],["Следующий день","программа сама знает, какой день дальше"]]},
+  rows:[["Фулбади","3 раза в неделю, для начала"],["Верх-низ","4 раза в неделю"],["Пуш-пул-ноги","3 или 6 раз в неделю"],["Следующий день","программа сама знает, какой день дальше"],["Своя программа","«Профиль → Программа»: измени любую или собери свою, с днями, упражнениями, подходами и повторами"]]},
+ {t:"Календарь",p:"Вкладка «Календарь» показывает, что уже сделано, что ждёт тебя в ближайшие дни и когда отдых.",
+  rows:[["Залитый кружок","день с тренировкой"],["Жёлтый кружок","в этот день был рекорд"],["Кружок с обводкой","тренировка по плану"],["Без отметки","день отдыха"],["Дни тренировок","отметь, когда ты занимаешься: план подстроится"]]},
  {t:"Опыт и уровни",p:"За тренировки начисляется опыт. Уровни, рекорды и достижения считаются по журналу: удалишь тренировку, и опыт честно уменьшится.",
   rows:[["Подход","+"+XP.set+" XP"],["Рекорд в упражнении","+"+XP.pr+" XP"],["Тренировка завершена","+"+XP.done+" XP"],["Задание на сегодня","+"+XP.quest+" XP"],["Третья тренировка за неделю","+10%"]]},
  {t:"Ранги и отдых",p:"У каждой группы мышц свой ранг по силе. Группе, которую ты качал сегодня или вчера, лучше дать отдохнуть.",
@@ -834,6 +954,113 @@ function finding(d){
   if(!d.ws.length) return "Запиши первую тренировку, и персонаж начнёт расти.";
   const n=d.load30[d.lag]||0;
   return `Отстаёт ${GROUPS[d.lag].toLowerCase()}: сила ${Math.round(d.g[d.lag]*100)} из 100, ${n} ${plural(n,"подход","подхода","подходов")} за 30 дней.`;
+}
+/* ---------- calendar: what was done, what the program puts on the next days, and the rest days in between ---------- */
+const WD = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+const isoWd = k => (parseD(k).getDay()+6)%7+1;                 /* Monday 1 ... Sunday 7 */
+const PROG_FREQ = {fb:[1,3,5], ul:[1,2,4,5], ppl:[1,3,5]};
+const SPREAD = {1:[1],2:[1,4],3:[1,3,5],4:[1,2,4,5],5:[1,2,3,5,6],6:[1,2,3,4,5,6]};
+function cleanSchedule(a){return Array.isArray(a)?[...new Set(a.filter(n=>Number.isInteger(n)&&n>=1&&n<=7))].sort((x,y)=>x-y):null}
+/* the weekdays the user trains on: their own choice, else what the program is made for */
+function schedOf(p){
+  if(!PRM[p.program]) return [];
+  return cleanSchedule(p.schedule)||PROG_FREQ[p.program]||SPREAD[Math.min(6,Math.max(1,PRM[p.program].days.length))];
+}
+/* program days on the scheduled weekdays from today on, in turn; a day done today is not planned again */
+function calPlan(toKey){
+  const out={}, pid=S.profile.program, prog=PRM[pid]; if(!prog||!prog.days.length) return out;
+  const sched=new Set(schedOf(S.profile)); if(!sched.size) return out;
+  const days=prog.days, now=today(), doneToday=D.ws.some(w=>w.date===now);
+  let i=days.findIndex(d=>d.id===nextDay(pid,S.demo?[]:S.workouts)); if(i<0) i=0;
+  for(let k=now,n=0;k<=toKey&&n<500;k=addDays(k,1),n++){
+    if(!sched.has(isoWd(k))||(k===now&&doneToday)) continue;
+    out[k]=days[i%days.length].id; i++;
+  }
+  return out;
+}
+const CAL_LABEL = {done:"Сделано",plan:"По плану",miss:"Пропущено",rest:"День отдыха"};
+const LONG_D = new Intl.DateTimeFormat("ru-RU",{day:"numeric",month:"long"});
+const LONG_WD = new Intl.DateTimeFormat("ru-RU",{weekday:"long"});
+const MONTH_N = new Intl.DateTimeFormat("ru-RU",{month:"long"});
+function calDayTitle(k){
+  const t=today(); const rel=k===t?"Сегодня":k===addDays(t,-1)?"Вчера":k===addDays(t,1)?"Завтра":cap(LONG_WD.format(parseD(k)));
+  return rel+", "+LONG_D.format(parseD(k));
+}
+function viewCalendar(){
+  const now=today(), p=S.profile, pid=p.program, prog=PRM[pid];
+  const cal=S.cal||(S.cal={y:+now.slice(0,4),m:+now.slice(5,7)-1,sel:now});
+  const gridStart=weekKey(dkey(new Date(cal.y,cal.m,1)));
+  const gridEnd=addDays(weekKey(dkey(new Date(cal.y,cal.m+1,0))),6);
+  const plan=calPlan(gridEnd>addDays(now,14)?gridEnd:addDays(now,14));
+  const byDate={}; for(const w of D.ws)(byDate[w.date]||(byDate[w.date]=[])).push(w);
+  const sched=new Set(prog?schedOf(p):[]), firstDate=D.ws.length?D.ws[0].date:null;
+  const dayName=id=>{const d=prog&&prog.days.find(x=>x.id===id);return d?d.n:""};
+  const st=k=>{
+    const w=byDate[k];
+    if(w) return {st:"done",ws:w,pr:w.some(x=>(D.perW[x.id]||{}).prSets>0)};
+    if(plan[k]) return {st:"plan",day:plan[k]};
+    if(k<now&&firstDate&&k>=firstDate&&sched.has(isoWd(k))) return {st:"miss"};
+    return {st:"rest"};
+  };
+  const nextK=Object.keys(plan).sort()[0];
+  const sum=!prog?"Выбери программу в профиле, и здесь появится план на ближайшие дни."
+    :(sched.size?`На этой неделе ${D.thisWeek} из ${sched.size}. `+(nextK?`Дальше: ${esc(dayName(plan[nextK]))}, ${nextK===now?"сегодня":nextK===addDays(now,1)?"завтра":LONG_WD.format(parseD(nextK))}.`:""):"Отметь дни тренировок ниже, и здесь появится план.");
+  /* the next seven days, from today */
+  const strip=Array.from({length:7},(_,i)=>addDays(now,i)).map(k=>{
+    const s=st(k), lab=s.st==="plan"?dayName(s.day):s.st==="done"?"Сделано":s.st==="miss"?"Пропущено":"Отдых";
+    return `<button class="nx ${s.st}${s.pr?" pr":""}${k===now?" today":""}" data-act="cal-sel" data-id="${k}" aria-pressed="${k===cal.sel}" aria-label="${esc(calDayTitle(k))}: ${esc(CAL_LABEL[s.st])}${s.st==="plan"?", "+esc(dayName(s.day)):""}"><span class="w">${WD[isoWd(k)-1]}</span><span class="n">${+k.slice(8)}</span><span class="l">${esc(lab)}</span></button>`}).join("");
+  /* the month */
+  const cells=[]; let seen={done:0,pr:0,plan:0,miss:0};
+  for(let k=gridStart;k<=gridEnd;k=addDays(k,1)){
+    const inM=+k.slice(5,7)-1===cal.m, s=st(k);
+    if(inM){seen[s.st]=(seen[s.st]||0)+1; if(s.pr) seen.pr++}
+    cells.push(inM?`<button class="cd ${s.st}${s.pr?" pr":""}${k===now?" today":""}" data-act="cal-sel" data-id="${k}" aria-pressed="${k===cal.sel}" aria-label="${esc(calDayTitle(k))}: ${esc(CAL_LABEL[s.st])}"><span class="cn">${+k.slice(8)}</span></button>`
+      :`<span class="cd out" aria-hidden="true"></span>`);
+  }
+  const key=[seen.done?'<span><i class="k-done"></i>Тренировка</span>':"",seen.pr?'<span><i class="k-pr"></i>Рекорд</span>':"",seen.plan?'<span><i class="k-plan"></i>По плану</span>':"",seen.miss?'<span><i class="k-miss"></i>Пропущено</span>':""].join("");
+  const chev=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+  const mName=cap(MONTH_N.format(new Date(cal.y,cal.m,1)))+" "+cal.y;
+  const onNow=cal.y===+now.slice(0,4)&&cal.m===+now.slice(5,7)-1&&cal.sel===now;
+  /* the chosen day */
+  const sel=cal.sel, ss=st(sel);
+  let body="";
+  if(ss.st==="done"){
+    body=ss.ws.map(w=>{const r=D.perW[w.id]||{xp:0,prSets:0,nSets:0,setsBy:{}};
+      const d=w.prog&&progDay(w.prog,w.day);
+      return `<div class="list"><div class="li" style="min-height:48px"><span class="grow"><span class="t">${esc(d?d.n:"Тренировка")}</span><span class="s">${Object.keys(r.setsBy).map(g=>GROUPS[g].toLowerCase()).join(", ")||"без подходов"} · ${r.nSets} ${plural(r.nSets,"подход","подхода","подходов")}${r.prSets?` · рекордов: ${r.prSets}`:""}</span></span><span class="fig" style="color:var(--accent);font-weight:600">+${fmt(r.xp)} XP</span></div>
+      ${(w.exercises||[]).filter(e=>EXM[e.ex]&&(e.sets||[]).some(x=>+x.r>0)).map(e=>{const good=e.sets.filter(x=>+x.r>0), top=topSet(good);
+        return `<div class="li" style="min-height:44px"><span class="grow">${esc(EXM[e.ex].n)}</span><span class="fig sub num">${good.length} × · ${fmtW(+top.w)} кг × ${esc(top.r)}</span></div>`}).join("")}</div>`}).join("");
+  }else if(ss.st==="plan"){
+    const list=buildDay(pid,ss.day,new Set(p.hidden||[]),ALL);
+    body=`<div class="list">${list.map(x=>`<div class="li" style="min-height:44px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig num">${x.s} × ${esc(x.r)}</span></div>`).join("")||'<p class="sub" style="font-size:13px">В этом дне пока нет упражнений.</p>'}</div>`
+      +(sel===now&&list.length?`<button class="btn primary block" data-act="start-prog">Начать: ${esc(dayName(ss.day))}</button>`:`<p class="meta">${sel===now?"":"Упражнения подберутся по твоему залу, когда придёт этот день."}</p>`);
+  }else if(ss.st==="miss"){
+    body='<p class="sub" style="font-size:13px">По расписанию в этот день была тренировка. День программы не пропал: он ждёт своей очереди и встанет в ближайший день тренировок.</p>';
+  }else{
+    const nx=Object.keys(plan).sort().find(k=>k>sel);
+    body=`<p class="sub" style="font-size:13px">${sel>now?"День отдыха: мышцы растут, пока ты не тренируешься.":sel===now?"Сегодня отдых. Мышцы восстанавливаются.":"В этот день тренировки не было."}${nx&&sel>=now?` Следующая тренировка: ${esc(dayName(plan[nx]))}, ${nx===addDays(now,1)?"завтра":LONG_WD.format(parseD(nx))}.`:""}</p>`;
+  }
+  const label=ss.st==="plan"?dayName(ss.day):CAL_LABEL[ss.st];
+  return `<div class="stack">
+    <div class="titlerow"><div class="grow"><h1>Календарь</h1><p class="sub" style="font-size:13px">${sum}</p></div></div>
+    <div class="nxs" role="group" aria-label="Ближайшие семь дней">${strip}</div>
+    <div class="card">
+      <div class="cal-h"><button class="btn ghost" data-act="cal-prev" aria-label="Предыдущий месяц">${chev("M15 5l-7 7 7 7")}</button><h2>${mName}</h2><button class="btn ghost" data-act="cal-next" aria-label="Следующий месяц">${chev("M9 5l7 7-7 7")}</button></div>
+      <div class="cal" role="group" aria-label="${mName}">${WD.map(n=>`<span class="wd" aria-hidden="true">${n}</span>`).join("")}${cells.join("")}</div>
+      ${key?`<div class="cal-key">${key}</div>`:""}
+      ${onNow?"":`<button class="link" data-act="cal-today" style="align-self:flex-start">Сегодня</button>`}
+    </div>
+    <div class="card" aria-live="polite">
+      <div class="day-h"><div class="grow"><h2>${esc(calDayTitle(sel))}</h2></div><span class="pill${ss.st==="miss"?" neg":""}">${esc(label)}</span></div>
+      ${body}
+    </div>
+    <div class="card">
+      <div class="row between"><h2>Дни тренировок</h2><span class="meta num">${prog?sched.size+" в неделю":""}</span></div>
+      ${prog?`<div class="wdsel" role="group" aria-label="Дни недели, в которые ты тренируешься">${WD.map((n,i)=>`<button data-act="cal-wd" data-id="${i+1}" aria-pressed="${sched.has(i+1)}">${n}</button>`).join("")}</div>
+      <p class="sub" style="font-size:13px">Дни программы «${esc(prog.n)}» идут по очереди на отмеченные дни. Если пропустишь, день подождёт и встанет в следующий.</p>`
+        :`<p class="sub" style="font-size:13px">Сначала выбери программу: она решает, что делать в какой день.</p><button class="btn small" data-tab="profile" style="align-self:flex-start">Выбрать программу</button>`}
+    </div>
+  </div>`;
 }
 function viewHome(){
   const p=S.profile, d=D;
@@ -936,10 +1163,10 @@ function planToday(){
 }
 function progCard(pl){
   const p=PRM[pl.pid], d=progDay(pl.pid,pl.day);
-  return `<div class="card"><div class="row between"><h2>${p.n}</h2><button class="link" data-tab="profile">Сменить</button></div>
-    <div class="seg" role="group" aria-label="День программы">${p.days.map(x=>`<button data-pday="${x.id}" aria-pressed="${x.id===pl.day}">${x.n}</button>`).join("")}</div>
-    <div class="list">${pl.list.map(x=>`<div class="li" style="min-height:40px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig">${x.s} × ${x.r}</span></div>`).join("")||'<p class="sub">В твоём зале нет тренажёров для этого дня. Включи их в «Мой зал».</p>'}</div>
-    <button class="btn primary block" data-act="start-prog" ${pl.list.length?"":"disabled"}>Начать: ${d.n}</button></div>`;
+  return `<div class="card"><div class="row between"><h2>${esc(p.n)}</h2><button class="link" data-tab="profile">Сменить</button></div>
+    <div class="${p.days.length>3?"chips":"seg"}" role="group" aria-label="День программы">${p.days.map(x=>`<button data-pday="${esc(x.id)}" aria-pressed="${x.id===pl.day}">${esc(x.n)}</button>`).join("")}</div>
+    <div class="list">${pl.list.map(x=>`<div class="li" style="min-height:40px"><span class="grow">${esc(EXM[x.ex].n)}</span><span class="fig">${x.s} × ${esc(x.r)}</span></div>`).join("")||(d.sl.length?'<p class="sub">В твоём зале нет тренажёров для этого дня. Включи их в «Мой зал».</p>':'<p class="sub">В этом дне пока нет упражнений. Добавь их в «Профиль → Программа → Изменить».</p>')}</div>
+    <button class="btn primary block" data-act="start-prog" ${pl.list.length?"":"disabled"}>Начать: ${esc(d.n)}</button></div>`;
 }
 function viewWorkout(){
   const a=S.active;
@@ -964,7 +1191,7 @@ function viewWorkout(){
   return `<div class="stack">
     <div class="titlerow"><div class="grow"><h1>Тренировка</h1><p class="sub" style="font-size:13px">${relDate(a.date)} · ${esc(gymName())} · идёт запись</p></div><span class="num" style="font-weight:600" id="xp-now">+${nSets*XP.set} XP</span></div>
     ${a.exercises.length?"":`<div class="card"><p class="sub">Добавь первое упражнение: подскажу вес по прошлому разу.</p></div>`}
-    ${a.exercises.map((ex,i)=>exCard(ex,i)).join("")}
+    ${a.exercises.map((ex,i)=>EXM[ex.ex]?exCard(ex,i):"").join("")}
     <div class="grid2"><button class="btn" data-act="open-lib">Добавить упражнение</button><button class="btn" data-act="open-map">Карта зала</button></div>
     <div class="grid2">
       <button class="btn ${S.confirm==="cancel"?"danger":"ghost"}" data-act="${S.confirm==="cancel"?"cancel-yes":"cancel"}">${S.confirm==="cancel"?"Удалить запись":"Отменить"}</button>
@@ -993,6 +1220,7 @@ function exCard(ex,i){
 function viewSheet(){
   if(S.sheet.mode==="gym") return viewGymSheet();
   if(S.sheet.mode==="map") return viewMapSheet();
+  if(S.sheet.mode==="prog") return viewProgSheet();
   const q=(S.sheet.q||"").toLowerCase(), gsel=S.sheet.g||"all";
   const items=ALL.filter(e=>!isHidden(e.id)&&(gsel==="all"||e.g===gsel));
   const zones=ZONE_ORDER.filter(z=>items.some(e=>e.z===z));
@@ -1447,6 +1675,54 @@ function viewMapSheet(){
   </div></div>`;
 }
 function gymName(){return (S.profile&&S.profile.gym)||"Crunch Fit Lichtenberg"}
+/* ---------- program editor: any program, built-in or own, can be changed; a changed built-in has a way back ---------- */
+/* the editable copy lives in the profile; the first change of a built-in program copies it there */
+function pgEdit(){
+  const list=S.profile.programs||(S.profile.programs=[]); let p=list.find(x=>x.id===S.sheet.pid);
+  if(!p){const b=PROG_BASE[S.sheet.pid]; if(!b) return null;
+    p={id:b.id,n:b.n,days:b.days.map(d=>({id:d.id,n:d.n,sl:d.sl.map(x=>({o:x.o.slice(),s:x.s,r:x.r}))}))}; list.push(p)}
+  return p;
+}
+const pgDay = p => p.days.find(d=>d.id===S.sheet.day)||p.days[0];
+async function pgSave(){await store.saveProfile(S.profile);render()}
+function pgName(s){const e=EXM[s.o.find(id=>EXM[id])||s.o[0]];return e?{n:e.n,g:GROUPS[e.g]}:{n:"Упражнение не найдено",g:"оно удалено из твоего зала"}}
+function viewProgSheet(){
+  const sh=S.sheet, pr=PRM[sh.pid];
+  if(!pr){S.sheet=null;return ""}
+  const day=pr.days.find(d=>d.id===sh.day)||pr.days[0], di=pr.days.indexOf(day);
+  if(sh.pick) return viewProgPick(day);
+  const own=!!pr.own, edited=!!pr.edited;
+  const conf=(id,text,yes)=>sh.confirm===id?`<div class="well stack" style="gap:10px"><p class="sub" style="font-size:13px">${text}</p><div class="row"><button class="btn danger small" data-act="${yes}">Да</button><button class="btn ghost small" data-act="pg-no">Отмена</button></div></div>`:"";
+  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="pg-h" data-stop>
+    <div class="row between"><div><h2 id="pg-h">Программа</h2><p class="meta">${esc(pr.sub)}</p></div><button class="btn small" data-act="close-sheet">Готово</button></div>
+    <div class="field"><label for="pg-name">Название</label><input id="pg-name" name="program" maxlength="30" value="${esc(pr.n)}" autocomplete="off" spellcheck="false"></div>
+    <div class="chips" role="group" aria-label="Дни программы">${pr.days.map(d=>`<button data-act="pg-day" data-id="${esc(d.id)}" aria-pressed="${d.id===day.id}">${esc(d.n)}</button>`).join("")}${pr.days.length<MAX_DAYS?`<button data-act="pg-day-add" aria-pressed="false">Добавить день</button>`:""}</div>
+    <div class="field"><label for="pg-dn">Название дня</label><input id="pg-dn" name="day" maxlength="24" value="${esc(day.n)}" autocomplete="off" spellcheck="false"></div>
+    ${day.sl.map((s,i)=>{const nm=pgName(s);return `<div class="well stack" style="gap:10px">
+      <div><span class="t" style="font-weight:500;display:block">${esc(nm.n)}</span><span class="meta">${esc(nm.g)}</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label for="pgs-${i}">Подходов</label><input id="pgs-${i}" data-pgs="${i}" inputmode="numeric" maxlength="2" value="${s.s}" autocomplete="off"></div>
+        <div class="field"><label for="pgr-${i}">Повторов</label><input id="pgr-${i}" data-pgr="${i}" maxlength="8" value="${esc(s.r)}" autocomplete="off"></div></div>
+      <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn small" data-act="pg-up" data-i="${i}" ${i?"":"disabled"} aria-label="Поднять выше: ${esc(nm.n)}">Выше</button><button class="btn small" data-act="pg-down" data-i="${i}" ${i<day.sl.length-1?"":"disabled"} aria-label="Опустить ниже: ${esc(nm.n)}">Ниже</button><button class="btn small" data-act="pg-rep" data-i="${i}">Заменить</button><button class="btn small ghost" data-act="pg-rm" data-i="${i}" aria-label="Убрать: ${esc(nm.n)}">Убрать</button></div></div>`}).join("")||'<p class="sub" style="font-size:13px">В этом дне пока нет упражнений.</p>'}
+    <button class="btn primary" data-act="pg-add" ${day.sl.length<MAX_SLOTS?"":"disabled"} style="align-self:flex-start">Добавить упражнение</button>
+    <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn small" data-act="pg-left" ${di?"":"disabled"}>День раньше</button><button class="btn small" data-act="pg-right" ${di<pr.days.length-1?"":"disabled"}>День позже</button><button class="btn small ghost" data-act="pg-confirm" data-id="day" ${pr.days.length>1?"":"disabled"}>Убрать день</button></div>
+    ${conf("day","Убрать день «"+esc(day.n)+"»? Записанные тренировки останутся.","pg-day-del")}
+    ${own?`<button class="btn danger small" data-act="pg-confirm" data-id="del" style="align-self:flex-start">Удалить программу</button>`:edited?`<button class="btn small" data-act="pg-confirm" data-id="reset" style="align-self:flex-start">Вернуть исходную</button>`:""}
+    ${conf("del","Удалить программу «"+esc(pr.n)+"»? Записанные тренировки останутся.","pg-del-yes")}
+    ${conf("reset","Вернуть программу «"+esc(pr.n)+"» к исходной? Твои изменения пропадут.","pg-reset-yes")}
+  </div></div>`;
+}
+function viewProgPick(day){
+  const pk=S.sheet.pick, gsel=pk.g||"all", q=(pk.q||"").toLowerCase();
+  const items=ALL.filter(e=>!isHidden(e.id)&&(gsel==="all"||e.g===gsel)), zones=ZONE_ORDER.filter(z=>items.some(e=>e.z===z));
+  return `<div class="sheet-bg" data-act="close-sheet"><div class="sheet stack" role="dialog" aria-modal="true" aria-labelledby="pk-h" data-stop>
+    <div class="row between"><div><h2 id="pk-h">${pk.slot==null?"Добавить в «"+esc(day.n)+"»":"Заменить упражнение"}</h2><p class="meta">${esc(gymName())} · ${items.length} в этом фильтре</p></div><button class="btn small" data-act="pg-pick-close">Назад</button></div>
+    <input class="search" id="pg-q" name="search" type="search" placeholder="Найти тренажёр или упражнение…" aria-label="Найти тренажёр или упражнение" value="${esc(pk.q||"")}" autocomplete="off" spellcheck="false">
+    <div class="chips" role="group" aria-label="Группа мышц">${[["all","Все"],...Object.entries(GROUPS)].map(([k,n])=>`<button data-act="pg-g" data-id="${k}" aria-pressed="${gsel===k}">${n}</button>`).join("")}</div>
+    ${zones.map(z=>`<section class="zone" data-zone><h3 class="meta" style="font-weight:500;padding-top:6px">${ZONES[z]}</h3><div class="list">${items.filter(e=>e.z===z).map(e=>{const hay=(e.n+" "+(e.ru||"")).toLowerCase();
+      return `<button class="li" data-act="pg-pick" data-id="${esc(e.id)}" data-name="${esc(hay)}" ${q&&!hay.includes(q)?"hidden":""}><span class="grow"><span class="t">${esc(e.n)}</span><span class="s">${e.ru?esc(e.ru)+" · ":""}${GROUPS[e.g]}</span></span><span class="fig sub" aria-hidden="true">${pk.slot==null?"Добавить":"Выбрать"}</span></button>`}).join("")}</div></section>`).join("")}
+  </div></div>`;
+}
 function viewGymSheet(){
   const cg=S.sheet.cg||"chest";
   const total=ALL.length, on=ALL.filter(e=>!isHidden(e.id)).length;
@@ -1588,7 +1864,8 @@ function viewProfile(){
       <button class="btn primary" data-act="p-save" style="align-self:flex-end">Сохранить</button>
     </div>
     <div class="card"><h2>Программа</h2>
-      <div class="seg prog-seg" role="group" aria-label="Программа тренировок">${[{id:"",n:"Без программы",sub:"Собираешь тренировку сам"}].concat(PROGRAMS).map(o=>`<button data-prog="${o.id}" aria-pressed="${(p.program||"")===o.id}"><span>${o.n}</span><span class="meta">${o.sub}</span></button>`).join("")}</div></div>
+      <div class="seg prog-seg" role="group" aria-label="Программа тренировок">${[{id:"",n:"Без программы",sub:"Собираешь тренировку сам"}].concat(Object.values(PRM)).map(o=>`<button data-prog="${esc(o.id)}" aria-pressed="${(p.program||"")===o.id}"><span>${esc(o.n)}</span><span class="meta">${esc(o.sub)}</span></button>`).join("")}</div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="pg-edit" ${PRM[p.program]?"":"disabled"}>Изменить</button><button class="btn small" data-act="pg-copy" ${PRM[p.program]&&(p.programs||[]).length<MAX_PROGS?"":"disabled"}>Сделать копию</button><button class="btn small" data-act="pg-new" ${(p.programs||[]).length<MAX_PROGS?"":"disabled"}>Новая программа</button></div></div>
     <div class="card"><div class="row between"><h2>Мой зал</h2><span class="meta num">${ALL.filter(e=>!isHidden(e.id)).length} из ${ALL.length}</span></div>
       <p class="sub" style="font-size:13px">Тренажёры ${esc(gymName())}: Hammer Strength, Life Fitness, кроссовер, свободные веса${(p.custom||[]).length?` и ${(p.custom||[]).length} ${plural((p.custom||[]).length,"свой","своих","своих")}`:""}. Убери то, чего нет в зале, и добавь недостающее.</p>
       <button class="btn" data-act="open-gym" style="align-self:flex-start">Настроить тренажёры</button></div>
@@ -1736,7 +2013,10 @@ document.addEventListener("click",async ev=>{
     case "cancel": S.confirm="cancel"; render(); break;
     case "cancel-yes": S.active=null; S.confirm=null; draft.set(null); render(); toast("Запись удалена"); break;
     case "finish":{
-      const w=S.active; w.exercises=w.exercises.map(e=>({ex:e.ex,sets:e.sets.filter(s=>parseInt(s.r)>0).map(s=>({w:String(s.w||"0").replace(",","."),r:String(parseInt(s.r)||0)}))})).filter(e=>e.sets.length);
+      const w=S.active; const raw=w.exercises.filter(e=>EXM[e.ex]);
+      if(raw.some(e=>e.sets.some(s=>parseInt(s.r)>REPS_MAX||(parseFloat(String(s.w).replace(",","."))||0)>WEIGHT_MAX||(parseFloat(String(s.w).replace(",","."))||0)<0))){
+        toast("Проверь числа: вес не больше "+WEIGHT_MAX+" кг, повторов не больше "+REPS_MAX);return}
+      w.exercises=raw.map(e=>({ex:e.ex,sets:e.sets.filter(s=>parseInt(s.r)>0).map(s=>({w:String(s.w||"0").replace(",","."),r:String(parseInt(s.r)||0)}))})).filter(e=>e.sets.length);
       if(!w.exercises.length){toast("Добавь хотя бы один подход с повторами");return}
       if(S.demo){S.demo=false;S.workouts=[]}
       S.summaryLevelBefore=derive().level;
@@ -1758,7 +2038,48 @@ document.addEventListener("click",async ev=>{
     case "coach": askCoach(); break;
     case "coach-reset": S.coach=null; askCoach(); break;
     case "coach-stop": if(coachCtl) coachCtl.abort(); break;
+    case "cal-prev": case "cal-next":{const c=S.cal; if(!c) break; c.m+=a==="cal-next"?1:-1; if(c.m<0){c.m=11;c.y--} if(c.m>11){c.m=0;c.y++} render(); break}
+    case "cal-today": S.cal=null; render(); break;
+    case "cal-sel":{const c=S.cal; if(!c) break; c.sel=t.dataset.id; const d=parseD(c.sel); c.y=d.getFullYear(); c.m=d.getMonth(); render(); break}
+    case "cal-wd":{const n=+t.dataset.id; if(!(n>=1&&n<=7)) break; const cur=new Set(schedOf(S.profile)); cur.has(n)?cur.delete(n):cur.add(n);
+      S.profile.schedule=[...cur].sort((x,y)=>x-y); await store.saveProfile(S.profile); render(); break}
     case "open-gym": S.sheet={mode:"gym",cg:"chest"}; render(); break;
+    case "pg-edit": if(PRM[S.profile.program]){S.sheet={mode:"prog",pid:S.profile.program,day:null,pick:null,confirm:null};render()} break;
+    case "pg-new": case "pg-copy":{
+      const list=S.profile.programs||(S.profile.programs=[]); if(list.length>=MAX_PROGS) break;
+      const src=a==="pg-copy"?PRM[S.profile.program]:null; if(a==="pg-copy"&&!src) break;
+      const id="p-"+uid(), day0="d-"+uid();
+      list.push(src?{id,n:(src.n+" (копия)").slice(0,30),days:src.days.map(d=>({id:d.id,n:d.n,sl:d.sl.map(x=>({o:x.o.slice(),s:x.s,r:x.r}))}))}
+                   :{id,n:"Моя программа",days:[{id:day0,n:"День 1",sl:[]}]});
+      S.profile.program=id; S.pday=null; S.sheet={mode:"prog",pid:id,day:null,pick:null,confirm:null};
+      await pgSave(); break}
+    case "pg-day": S.sheet.day=t.dataset.id; S.sheet.confirm=null; render(); break;
+    case "pg-day-add":{const p=pgEdit(); if(!p||p.days.length>=MAX_DAYS) break;
+      const d={id:"d-"+uid(),n:"День "+(p.days.length+1),sl:[]}; p.days.push(d); S.sheet.day=d.id; await pgSave(); break}
+    case "pg-confirm": S.sheet.confirm=t.dataset.id; render(); break;
+    case "pg-no": S.sheet.confirm=null; render(); break;
+    case "pg-day-del":{const p=pgEdit(); if(!p||p.days.length<2) break;
+      const i=p.days.indexOf(pgDay(p)); p.days.splice(i,1); S.sheet.day=null; S.sheet.confirm=null; S.pday=null; await pgSave(); break}
+    case "pg-left": case "pg-right":{const p=pgEdit(); if(!p) break;
+      const i=p.days.indexOf(pgDay(p)), j=i+(a==="pg-left"?-1:1); if(j<0||j>=p.days.length) break;
+      [p.days[i],p.days[j]]=[p.days[j],p.days[i]]; await pgSave(); break}
+    case "pg-up": case "pg-down":{const p=pgEdit(); if(!p) break;
+      const d=pgDay(p), i=+t.dataset.i, j=i+(a==="pg-up"?-1:1); if(!d.sl[i]||!d.sl[j]) break;
+      [d.sl[i],d.sl[j]]=[d.sl[j],d.sl[i]]; await pgSave(); break}
+    case "pg-rm":{const p=pgEdit(); if(!p) break; pgDay(p).sl.splice(+t.dataset.i,1); await pgSave(); break}
+    case "pg-add": S.sheet.pick={slot:null,g:"all",q:""}; render(); break;
+    case "pg-rep": S.sheet.pick={slot:+t.dataset.i,g:"all",q:""}; render(); break;
+    case "pg-pick-close": S.sheet.pick=null; render(); break;
+    case "pg-g": S.sheet.pick.g=t.dataset.id; render(); break;
+    case "pg-pick":{const p=pgEdit(); if(!p||!EXM[t.dataset.id]) break; const d=pgDay(p), id=t.dataset.id, slot=S.sheet.pick.slot;
+      if(slot==null){if(d.sl.length>=MAX_SLOTS) break; d.sl.push({o:[id],s:3,r:"8–12"})}
+      else if(d.sl[slot]) d.sl[slot].o=[id];
+      S.sheet.pick=null; await pgSave(); break}
+    case "pg-del-yes":{const id=S.sheet.pid;
+      S.profile.programs=(S.profile.programs||[]).filter(x=>x.id!==id);
+      if(S.profile.program===id) S.profile.program=null; S.pday=null; S.sheet=null; await pgSave(); toast("Программа удалена"); break}
+    case "pg-reset-yes":{const id=S.sheet.pid;
+      S.profile.programs=(S.profile.programs||[]).filter(x=>x.id!==id); S.sheet.day=null; S.sheet.confirm=null; S.pday=null; await pgSave(); toast("Исходная программа вернулась"); break}
     case "add-custom":{const n=($("#c-name").value||"").trim(); if(!n){toast("Введи название тренажёра");$("#c-name").focus();return}
       S.profile.custom=(S.profile.custom||[]).concat([{id:"c-"+uid(),n,g:S.sheet.cg||"chest"}]); await store.saveProfile(S.profile); render(); toast(n+": добавлен"); break}
     case "rm-custom":{ev.preventDefault();const id=t.dataset.id;S.profile.custom=(S.profile.custom||[]).filter(c=>c.id!==id);await store.saveProfile(S.profile);render();break}
@@ -1767,6 +2088,16 @@ document.addEventListener("click",async ev=>{
 document.addEventListener("change",async ev=>{
   const el=ev.target;
   if(el.id==="imp-file"){await readImportFile(el);return}
+  if(S.sheet&&S.sheet.mode==="prog"){
+    if(el.id==="pg-name"||el.id==="pg-dn"){const p=pgEdit(), v=el.value.trim();
+      if(p&&v){if(el.id==="pg-name")p.n=v.slice(0,30);else pgDay(p).n=v.slice(0,24)}
+      await pgSave(); return}
+    if(el.dataset.pgs!==undefined||el.dataset.pgr!==undefined){const p=pgEdit(); if(!p){return}
+      const x=pgDay(p).sl[+(el.dataset.pgs??el.dataset.pgr)];
+      if(x){if(el.dataset.pgs!==undefined){const n=parseInt(el.value); if(n>=1&&n<=10)x.s=n}
+            else{const r=el.value.trim().replace(/\s+/g," "); if(okReps(r))x.r=r}}
+      await pgSave(); return}
+  }
   if(el.id==="map-file"){await readMapFile(el);return}
   /* typed angle or size: "150%", "45°" and "1,5" all read as numbers; anything else puts the old value back */
   if((el.id==="m-rot"||el.id==="m-size")&&S.sheet&&S.sheet.edit&&selM()){
@@ -1802,23 +2133,38 @@ document.addEventListener("input",ev=>{
     if(!S.map) S.map=GYM_MAP.machines.map(m=>({...m}));
     const m=selM(), v=el.value.trim(); if(v) m.n=v.slice(0,40); else delete m.n; mapStore.set(S.map);
     const h=$("#m-title"); if(h) h.textContent=mName(m); return}
+  if(el.id==="pg-q"&&S.sheet&&S.sheet.pick){S.sheet.pick.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll('[data-act="pg-pick"]').forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll('[data-act="pg-pick"]')].some(b=>!b.hidden)})}
   if(el.id==="lib-q"){S.sheet.q=el.value;const q=el.value.toLowerCase();document.querySelectorAll("[data-add-ex]").forEach(b=>{b.hidden=!!q&&!b.dataset.name.includes(q)});document.querySelectorAll("[data-zone]").forEach(z=>{z.hidden=![...z.querySelectorAll("[data-add-ex]")].some(b=>!b.hidden)})}
 });
 
+window.ironLevelCore={cleanLoaded,GROUP_KEYS,XP,levelNeed,cleanSchedule,schedOf,isoWd,calPlan,setProfile:(p,ws)=>{S.profile=p;S.workouts=ws;rebuildEx();D=derive()},
+  /* derive() on given data, without touching the live state */
+  derive:(profile,workouts)=>{const keep=[S.profile,S.workouts];S.profile=profile;S.workouts=workouts;rebuildEx();try{return derive()}finally{S.profile=keep[0];S.workouts=keep[1];rebuildEx()}}};
 window.ironLevelBackup={makeBackup,parseBackup};
 window.ironLevelMap={spots:GYM_MAP.machines.filter(canTap).map(m=>({id:m.id,ex:mEx(m)})),kinds:Object.keys(GM_KIND),icons:Object.keys(GM_ICON),add:GM_ADD,models:GYM_MODELS,kindEx:Object.fromEntries(Object.entries(GM_KIND).map(([k,v])=>[k,v.ex||[]])),parseMap,makeMapFile,machines:GYM_MAP.machines};
 window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
-window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
+window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,cleanPrograms,progList,rebuildPrograms,MAX_PROGS,MAX_DAYS,MAX_SLOTS,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
 
 /* ---------- boot ---------- */
 (async function boot(){
   await store.init();
   const data=await store.load();
   S.profile=data.profile; S.workouts=data.workouts||[];
-  const dr=draft.get(); if(dr&&dr.exercises) S.active=dr;
+  /* ask the browser to keep the data when space runs low; Safari decides by itself, a Home Screen app is favoured */
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){}
+  /* offline: sw.js keeps the app files. Not on localhost, so editing the app there never shows a stale copy (add ?sw to try) */
+  try{if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)&&(!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)||/[?&]sw\b/.test(location.search)))navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
+  rebuildEx();
+  const dr=draft.get();
+  if(dr&&Array.isArray(dr.exercises)){
+    dr.exercises=dr.exercises.filter(e=>e&&EXM[e.ex]&&Array.isArray(e.sets));
+    S.active=dr;
+  }
   if(S.profile&&!introSeen.get()) S.intro=0;
   S.map=mapStore.get();
   render();
+  if(store.broken) toast("Данные в браузере повреждены. Копия сохранена. Загрузи резервную копию: «Восстановить из файла»");
+  else if(store.blocked) toast("Браузер не даёт хранить данные. Приложение не сможет сохранять тренировки");
 })();
 })();
 </script>
