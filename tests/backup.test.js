@@ -15,11 +15,11 @@ const cases = {
   "prog-kept": () => { const r = pb(S({profile:{...P,program:"ppl"},workouts:[{...W[0],prog:"ppl",day:"push"}]})); return r.profile.program === "ppl" && r.workouts[0].prog === "ppl" && r.workouts[0].day === "push" || r; },
   "prog-proto-dropped": () => { const r = pb(S({profile:{...P,program:"constructor",custom:[{id:"c-9",n:"X",g:"constructor"}]},workouts:[{...W[0],prog:"toString",day:"x"}]})); return r.ok && r.profile.program === null && r.profile.custom.length === 0 && !("prog" in r.workouts[0]) || r; },
   "prog-unknown-dropped": () => { const r = pb(S({profile:{...P,program:"zzz"},workouts:[{...W[0],prog:"ppl",day:"zzz"}]})); return r.profile.program === null && !("prog" in r.workouts[0]) && !("day" in r.workouts[0]) || r; },
-  "header": () => { const b = mk(P, W, false); return b.app === "iron-level" && b.version === 2 && typeof b.exportedAt === "string" || b; },
+  "header": () => { const b = mk(P, W, false); return b.app === "iron-level" && b.version === 3 && typeof b.exportedAt === "string" || b; },
   "demo-excluded": () => mk(P, W, true).workouts.length === 0,
   "bad-json": () => { const r = pb("{nope"); return r.ok === false && r.error === "Не получилось прочитать файл. Это точно JSON из Iron Level?" || r; },
   "wrong-app": () => { const r = pb(S({app:"other",profile:P,workouts:W})); return r.error === "Это файл не из Iron Level" || r; },
-  "newer-version": () => { const r = pb(S({app:"iron-level",version:3,profile:P,workouts:W})); return r.error === "Файл из более новой версии Iron Level. Обнови страницу и попробуй снова" || r; },
+  "newer-version": () => { const r = pb(S({app:"iron-level",version:4,profile:P,workouts:W})); return r.error === "Файл из более новой версии Iron Level. Обнови страницу и попробуй снова" || r; },
   "no-profile": () => { const r = pb(S({workouts:W})); return r.error === "В файле нет профиля персонажа" || r; },
   "bad-bw": () => { const r = pb(S({profile:{...P,bw:5},workouts:W})); return r.error === "В файле нет профиля персонажа" || r; },
   "no-workouts": () => { const r = pb(S({profile:P})); return r.error === "В файле нет журнала тренировок" || r; },
@@ -45,6 +45,10 @@ const cases = {
     const r = pb(S({profile:{...P, programs:[prog], program:"ppl"}, workouts:[{...W[0], prog:"ppl", day:"push"}]})); return r.ok && r.profile.program === "ppl" && r.workouts[0].day === "push" || r; },
   "old-v1-file": () => { const r = pb(S({app:"iron-level", version:1, profile:{...P, program:"ppl"}, workouts:[{...W[0], prog:"ppl", day:"push"}]})); return r.ok && eq(r.profile.programs, []) && r.profile.program === "ppl" && r.workouts[0].day === "push" || r; },
   "programs-garbage-dropped": () => { const r = pb(S({profile:{...P, programs:"x"}, workouts:W})); return r.ok && eq(r.profile.programs, []) || r; },
+  "schedule-roundtrip": () => { const r = pb(S(mk({...P, schedule:[5,1,3]}, W, false))); return r.ok && eq(r.profile.schedule, [1,3,5]) || r; },
+  "schedule-garbage-dropped": () => { const r = pb(S({profile:{...P, schedule:[0,8,"2",1.5,null,2,2]}, workouts:W})); return r.ok && eq(r.profile.schedule, [2]) || r; },
+  "schedule-absent-stays-absent": () => { const r = pb(S({profile:P, workouts:W})); return r.ok && !("schedule" in r.profile) || r; },
+  "schedule-not-array": () => { const r = pb(S({profile:{...P, schedule:"1,3,5"}, workouts:W})); return r.ok && !("schedule" in r.profile) || r; },
 };
 
 export async function run() {
