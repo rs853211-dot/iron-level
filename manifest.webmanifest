@@ -3,6 +3,7 @@
   "short_name": "Iron Level",
   "lang": "ru",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0d0d0c",
   "theme_color": "#0d0d0c",
