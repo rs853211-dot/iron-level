@@ -319,6 +319,7 @@ const EX = [
  {id:"lf-pcurl",n:"Prone Leg Curl",ru:"сгибание ног лёжа",g:"legs",t:.9,z:"lf"},
  {id:"lf-tpress",n:"Triceps Press",ru:"жим на трицепс сидя",g:"arms",t:1,z:"lf"},
  {id:"lf-abdc",n:"Abdominal Crunch",ru:"скручивания",g:"core",t:.9,z:"lf"},
+ {id:"lf-torso",n:"Torso Rotation",ru:"вращение корпуса",g:"core",t:.9,z:"lf"},
  // cables
  {id:"fly",n:"Сведение в кроссовере",g:"chest",t:.35,z:"cable"},
  {id:"lat",n:"Тяга верхнего блока",g:"back",t:1.2,z:"cable"},
@@ -1283,7 +1284,12 @@ const GYM_MODELS = [
   {id:"ins-bic-dep",n:"Insignia Biceps Curl (Dependent)",k:"mach",icon:"m-bic",ex:["lf-bic"]},
   {id:"ins-tri",n:"Insignia Triceps Extension",k:"mach",icon:"m-tri",ex:["lf-tri"]},
   {id:"ins-tpress",n:"Triceps Press",k:"mach",icon:"m-tpress",ex:["lf-tpress"]},
-  {id:"ins-abd",n:"Insignia Abdominal",k:"mach",icon:"m-abd",ex:["lf-abdc"]}
+  {id:"ins-abd",n:"Insignia Abdominal",k:"mach",icon:"m-abd",ex:["lf-abdc"]},
+  {id:"ins-ext",n:"Insignia Leg Extension",k:"mach",icon:"m-ext",ex:["lf-ext"]},
+  {id:"ins-glute",n:"Insignia Glute",k:"mach",icon:"m-glute",ex:["lf-glute"]},
+  {id:"ins-had",n:"Insignia Hip Adduction",k:"mach",icon:"m-had",ex:["lf-add"]},
+  {id:"ins-torso",n:"Insignia Torso Rotation",k:"mach",icon:"m-torso",ex:["lf-torso"]},
+  {id:"hs-calf-m",n:"Hammer Strength Seated Calf Raise",k:"lever",icon:"m-calf",ex:["hs-calf"]}
 ];
 const GMM = Object.fromEntries(GYM_MODELS.map(x=>[x.id,x]));
 const mModel = m => m.model?GMM[m.model]:null;
@@ -1432,7 +1438,12 @@ const GM_ICON = (()=>{
    "m-bic":   sel(r(-15,-5,30,8,P,3)+r(-5,5,10,8,P,3)+grip(-15,-9)+grip(15,-9)+l(-15,-9,-11,-9)+l(15,-9,11,-9)),
    "m-tri":   sel(r(-9,-5,18,6,P,3)+r(-6,3,12,9,P,3)+l(-15,-11,-15,1)+l(15,-11,15,1)+grip(-15,-11)+grip(15,-11)),
    "m-tpress":sel(r(-6,-7,12,5,P,2)+r(-6,-1,12,8,P,3)+r(-16,-3,4,13,M,2)+r(12,-3,4,13,M,2)),
-   "m-abd":   sel(r(-8,-5,16,6,P,3)+r(-7,3,14,9,P,3)+'<circle cx="-11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/><circle cx="11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/>')
+   "m-abd":   sel(r(-8,-5,16,6,P,3)+r(-7,3,14,9,P,3)+'<circle cx="-11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/><circle cx="11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/>'),
+   "m-ext":   sel(r(-6,-7,12,9,P,3)+r(-6,3,12,8,P,3)+r(-8,13,16,5,M,2.5)),
+   "m-glute": stack+r(-3,-8,6,24,B,1.5)+r(-6,-7,12,6,P,3)+l(-14,2,14,2,M,2)+l(-14,9,14,9,M,2)+l(-14,2,-14,9,M,2)+l(14,2,14,9,M,2),
+   "m-had":   sel(r(-7,-5,14,6,P,3)+r(-7,3,14,9,P,3)+r(-15,-3,5,11,M,2)+r(10,-3,5,11,M,2)),
+   "m-torso": sel(r(-8,-6,16,7,P,3)+r(-7,3,14,9,P,3)+path("M-12 -7Q0 -14 12 -7")),
+   "m-calf":  r(-12,-16,24,32,B,4)+r(-9,-9,18,5,P,2)+r(-8,0,16,10,P,3)+l(-17,-4,17,-4)+plate(-18,-4)+plate(18,-4)
   };
 })();
 const mapMachines = () => S.map || GYM_MAP.machines;
