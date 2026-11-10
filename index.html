@@ -1378,84 +1378,86 @@ const GYM_MAP = {
  labels:[["Кардио",235,492,0],["Ресепшен",404,104,0],["Зал справа",770,455,0]]
 };
 /* top-down icons, drawn around 0,0, one graphic language for the whole floor (design-taste "drawing the subject",
-   Apple "familiarity" and "craft"):
-   - three levels of detail: B the frame's footprint reads at a glance, P the parts you touch (seat, pads, rollers)
-     describe the machine, M metal (bars, handles, pins) is the small detail; K is iron (weight stack, plates);
-   - depth by flat tone steps only, no outlines but the 2.5-unit metal line, corners 4 / 3 / 1.5;
+   Apple "familiarity" and "craft"). Most machines are 15–25px on the phone, so an icon is a few bold shapes:
+   - four tones, each with one meaning: B the frame, its footprint reads at a glance; P what the body touches (seat,
+     pads, rollers, footplates); M what the hands hold (bars, handles), the only white, one 3-unit line; I iron you
+     load (plates, seen edge-on as slabs); K the weight stack, a dark slot in the frame;
+   - depth by flat tone steps only, no outlines, corners 5 / 3 / 1.5;
    - one orientation everywhere: the stack, the rack or the console at the back (−y), where you sit or stand at the front (+y);
    - real proportions (about 27 units to a metre); cardio is a step quieter (CB/CD/CP), nothing to log there. */
 const GM_ICON = (()=>{
-  const B="#4a4a47", P="#8f8f8a", M="#e2e2de", K="#1c1c1b", CB="#3a3a38", CD="#2c2c2a", CP="#5c5c58";
+  const B="#4a4a47", P="#96968f", M="#ecece8", I="#6f6f6a", K="#161615", W="#5a5a56", CB="#3a3a38", CD="#2c2c2a", CP="#5c5c58";
   const r=(x,y,w,h,f,rx)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(rx??1.5)+'" fill="'+f+'"/>';
-  const l=(x1,y1,x2,y2,c,w)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+(c||M)+'" stroke-width="'+(w||2.5)+'" stroke-linecap="round"/>';
+  const l=(x1,y1,x2,y2,c,w)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+(c||M)+'" stroke-width="'+(w||3)+'" stroke-linecap="round"/>';
   const c=(x,y,rr,f)=>'<circle cx="'+x+'" cy="'+y+'" r="'+rr+'" fill="'+f+'"/>';
-  const ring=(x,y,rr)=>'<circle cx="'+x+'" cy="'+y+'" r="'+rr+'" fill="none" stroke="'+M+'" stroke-width="1.5"/>';
-  const path=(d,col,w)=>'<path d="'+d+'" fill="none" stroke="'+(col||M)+'" stroke-width="'+(w||2.5)+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  const path=(d,col,w)=>'<path d="'+d+'" fill="none" stroke="'+(col||M)+'" stroke-width="'+(w||3)+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  const both=f=>f(-1)+f(1);                                                     /* the same part left and right */
   /* shared parts */
-  const grip=(x,y)=>c(x,y,2.3,M);
-  const plate=(x,y)=>c(x,y,5.5,K)+ring(x,y,5.5)+c(x,y,1.6,M);                  /* a plate on its horn, seen from above */
-  const bar=(x0,x1,y)=>l(x0,y,x1,y)+r(x0-2,y-7,4,14,K,1)+r(x1-2,y-7,4,14,K,1);  /* barbell with a plate at each end */
-  /* selectorized (Life Fitness): a quiet stack at the back and a thin spine to the seat; what sets each model apart
-     is drawn large and light, so the silhouette tells the machines apart before any detail does */
-  const stack=r(-14,-17,28,9,B,3)+r(-11,-15.5,22,6,K,1.5);
-  const sel=inner=>stack+r(-3,-8,6,22,B,1.5)+inner;
-  /* racks and benches: two uprights with J-hooks and the bar across them */
-  const uprights=(y)=>r(-14,y-3,4,6,M,1)+r(10,y-3,4,6,M,1);
+  const roller=(y,w)=>r(-w/2,y,w,5,P,2.5);                                      /* a leg roller across the machine */
+  const bar=(x0,x1,y)=>l(x0+2,y,x1-2,y,M,2.5)+r(x0,y-6,4.5,12,I,1.5)+r(x1-4.5,y-6,4.5,12,I,1.5);  /* barbell, plates edge-on */
+  const horns=(x,y)=>l(-x,y,x,y,B,4)+r(-x-3,y-6.5,5,13,I,1.5)+r(x-2,y-6.5,5,13,I,1.5);           /* plate horns of a lever machine */
+  /* selectorized (Life Fitness): the stack across the back and a spine to the seat make a T; the one part that sets
+     a model apart reaches the edge of the icon, so the silhouette tells the machines apart before any detail does */
+  const stack=r(-14,-17,28,10,B,3)+r(-10,-15,20,6,K,2);
+  const sel=inner=>stack+r(-5,-9,10,25,B,3)+inner;
+  const seat=(y,h)=>r(-8,y,16,h??11,P,4), back=(y,h)=>r(-8,y,16,h??6,P,2.5);
+  /* plate-loaded (Hammer Strength): a full frame, no stack, plates on the horns at the back */
+  const frame=r(-13,-16,26,32,B,5);
   return {
    /* ---- cardio, a step quieter ---- */
    tread: r(-27,-13,54,26,CB,5)+r(-16,-9,41,18,CD,3)+r(-27,-13,9,26,CP,3),
-   ellip: r(-25,-9,50,18,CB,6)+r(-15,-7,11,5,CD,2)+r(-15,2,11,5,CD,2)+r(4,-8,9,16,CD,4)+r(-25,-6,6,12,CP,2),
+   ellip: r(-25,-9,50,18,CB,6)+r(-13,-7,24,5,CD,2.5)+r(-13,2,24,5,CD,2.5)+r(-25,-7,6,14,CP,2),
    stair: r(-13,-11,26,22,CB,4)+r(-13,-11,26,5,CP,2)+l(-8,-1,8,-1,CD,2)+l(-8,3.5,8,3.5,CD,2)+l(-8,8,8,8,CD,2),
-   bike:  l(-9,0,9,0,CB,5)+'<ellipse cx="-9" cy="0" rx="5" ry="8" fill="'+CP+'"/>'+'<ellipse cx="10" cy="0" rx="4.5" ry="4" fill="'+CP+'"/>'+l(-4,-7,-4,7,CB,3),
-   recumb: r(-21,-8,33,16,CB,4)+r(-21,-7,12,14,CP,3)+r(-9,-5,8,10,CD,2)+'<ellipse cx="17" cy="0" rx="5" ry="8" fill="'+CP+'"/>',
-   row:   r(-17,-2.5,45,5,CB,2)+c(-21,0,8.5,CB)+c(-21,0,5,CD)+r(-12,-7,5,14,CP,2)+r(6,-5,10,10,CP,3),
+   bike:  r(-14,-3,24,6,CB,3)+r(-9,-8,4,16,CP,2)+r(5,-4,9,8,CP,3.5),
+   recumb: r(-23,-5,40,10,CB,4)+r(-18,-9,4,18,CP,2)+r(4,-8,13,16,CP,4)+r(17,-9,5,18,CP,2),
+   row:   r(-17,-2.5,45,5,CB,2)+c(-21,0,8.5,CB)+c(-21,0,5,CD)+r(-12,-7,4,14,CP,2)+r(6,-5,10,10,CP,3),
    /* boxing bag hanging from the ceiling: nothing to log */
-   bag:   c(0,0,9,P)+c(0,0,5,B)+c(0,0,2,K),
+   bag:   c(0,0,9,CP)+c(0,0,4,CD),
    /* ---- free weights ---- */
-   bench: r(-8,-21,16,42,B,4)+r(-6,-13,12,33,P,3)+uprights(-19)+bar(-17,17,-19),
-   decl:  r(-8,-21,16,45,B,4)+r(-6,-13,12,29,P,3)+r(-9,18,18,5,P,2)+uprights(-19)+bar(-17,17,-19),
-   incl:  r(-8,-15,16,31,B,4)+r(-6,-11,12,13,P,3)+r(-6,4,12,10,P,3)+uprights(-14)+bar(-17,17,-14),
-   rack:  r(-22,-20,44,40,B,3)+r(-22,-20,5,5,M,1)+r(17,-20,5,5,M,1)+r(-22,15,5,5,M,1)+r(17,15,5,5,M,1)+r(-19,-3,4,6,M,1)+r(15,-3,4,6,M,1)+bar(-27,27,0),
-   smith: r(-30,-13,60,26,B,3)+r(-27,-11,3,22,M,1)+r(24,-11,3,22,M,1)+bar(-32,32,0)+r(-8,4,16,8,P,2),
-   platform: r(-22,-16,44,32,B,3)+r(-10,-15,20,30,P,2)+bar(-26,26,0),
+   bench: r(-11,-23,22,8,B,2)+r(-6,-15,12,36,P,3.5)+bar(-19,19,-19),
+   decl:  r(-11,-23,22,8,B,2)+r(-6,-15,12,31,P,3.5)+roller(19,20)+bar(-19,19,-19),
+   incl:  r(-11,-17,22,8,B,2)+r(-6,-10,12,14,P,3.5)+r(-6,6,12,11,P,3.5)+bar(-18,18,-13),
+   rack:  r(-22,-20,44,40,B,3)+r(-22,-16,6,32,W,2)+r(16,-16,6,32,W,2)+bar(-28,28,-3),
+   smith: r(-27,-13,54,26,B,3)+r(-24,-13,5,26,W,1.5)+r(19,-13,5,26,W,1.5)+bar(-33,33,0),
+   platform: r(-22,-16,44,32,B,3)+r(-9,-16,18,32,W,0)+bar(-28,28,0),
    /* the L-shaped dumbbell rack with a row of dumbbells on it, centred on its bounding box */
    dbrack: '<g transform="translate(-733.5 -289)">'+r(643,264,14,50,B,3)+r(657,295,167,14,B,3)
-     +Array.from({length:13},(_,i)=>r(663+i*12.5,297.5,8,9,K,1.5)+l(667+i*12.5,298.5,667+i*12.5,305.5,M,1.5)).join("")
-     +Array.from({length:3},(_,i)=>r(645,271+i*13,10,8,K,1.5)).join("")+'</g>',
+     +Array.from({length:13},(_,i)=>r(663+i*12.5,297.5,3,9,I,1)+r(668+i*12.5,297.5,3,9,I,1)+l(666+i*12.5,302,668+i*12.5,302,M,2)).join("")
+     +Array.from({length:3},(_,i)=>r(645.5,270+i*13,9,3,I,1)+r(645.5,275+i*13,9,3,I,1)+l(650,273+i*13,650,275+i*13,M,2)).join("")+'</g>',
    /* ---- cable and bodyweight ---- */
-   cable: r(-13,-48,26,17,B,3)+r(-10,-46,20,11,K,1.5)+c(0,-40.5,1.6,M)+r(-13,31,26,17,B,3)+r(-10,35,20,11,K,1.5)+c(0,40.5,1.6,M)+r(-3,-31,6,62,B,2)+l(0,-29,0,29,M,1.5)+c(0,-29,3,M)+c(0,29,3,M),
-   chin:  r(-16,-17,32,34,B,4)+r(-12,-15,24,8,K,1.5)+c(0,-11,1.6,M)+l(-14,-3,14,-3)+r(-7,4,14,9,P,3)+grip(-14,-3)+grip(14,-3),
-   bic:   r(-12,-12,24,24,B,4)+r(-9,-10.5,18,5,K,1.5)+r(-11,-2,22,5,P,2.5)+r(-5,5,10,6,P,2),
-   rig:   r(-40,-20,80,40,B,3)+[[-38,-18],[38,-18],[-38,18],[38,18],[0,-18],[0,18]].map(([x,y])=>r(x-2.5,y-2.5,5,5,M,1)).join("")+l(-37,0,37,0,M,2)
-     +[-26,-18,-10].map(x=>c(x,-10,3,K)).join("")+r(12,-12,20,8,P,2)+l(-20,5,-20,15,M,1.5)+l(-14,5,-14,15,M,1.5),
+   cable: r(-3,-34,6,68,B,2)+both(s=>r(-13,s<0?-48:31,26,17,B,3)+r(-9,s<0?-45:38,18,7,K,2)+c(0,s*27,3.5,M)),
+   chin:  r(-16,-17,32,34,B,5)+r(-11,-15,22,6,K,2)+r(-8,2,16,11,P,4)+l(-14,-4,14,-4),
+   bic:   r(-12,-12,24,24,B,4)+r(-8,-10,16,5,K,2)+r(-11,-2,22,6,P,3)+r(-5,6,10,6,P,3),
+   rig:   r(-40,-20,80,40,B,3)+[[-37,-17],[37,-17],[-37,17],[37,17],[0,-17],[0,17]].map(([x,y])=>r(x-3,y-3,6,6,W,1.5)).join("")+l(-32,0,32,0)
+     +[-26,-17,-8].map(x=>c(x,-10,3.5,K)).join("")+r(12,6,20,8,P,3),
    turf:  r(-90,-14,180,28,CB,3)+[-60,-30,0,30,60].map(x=>l(x,-11,x,11,CD,2)).join("")+l(-86,0,86,0,CD,1.5),
-   /* ---- plate-loaded (Hammer Strength): no stack, a plate on each horn ---- */
-   lever: r(-12,-16,24,32,B,4)+r(-7,-6,14,6,P,2)+r(-7,2,14,10,P,3)+l(-17,-11,17,-11)+plate(-18,-11)+plate(18,-11),
-   legpress: r(-12,-30,24,60,B,4)+r(-11,-27,22,6,M,2)+r(-8,6,16,12,P,3)+r(-8,20,16,8,P,3)+l(-19,-12,19,-12)+plate(-20,-12)+plate(20,-12),
-   hack:  r(-11,-24,22,48,B,4)+r(-7,-17,14,24,P,3)+r(-10,-21,7,5,P,2)+r(3,-21,7,5,P,2)+r(-10,13,20,8,M,2)+plate(-17,-2)+plate(17,-2),
+   /* ---- plate-loaded (Hammer Strength) ---- */
+   lever: frame+horns(20,-9)+back(-5)+seat(3),
+   legpress: r(-12,-30,24,60,B,5)+horns(22,-10)+r(-11,-27,22,8,P,2)+r(-8,4,16,13,P,4)+r(-8,19,16,8,P,3),
+   hack:  r(-11,-24,22,48,B,5)+horns(20,-2)+r(-7,-13,14,21,P,3.5)+both(s=>r(s<0?-10:3,-21,7,6,P,2.5))+r(-10,13,20,8,P,2),
    /* ---- selectorized: generic, then one per model of this gym ---- */
-   mach:  sel(r(-7,-6,14,5,P,2)+r(-7,1,14,9,P,3)),
-   "m-chest": sel(r(-7,-6,14,5,P,2)+r(-7,1,14,9,P,3)+path("M-8 -4H-15V12M8 -4H15V12")+grip(-15,13)+grip(15,13)),
-   "m-fly":   sel(r(-6,-6,12,5,P,2)+r(-6,1,12,8,P,3)+path("M-4 -9Q-19 -9 -19 7M4 -9Q19 -9 19 7")+grip(-19,8)+grip(19,8)),
-   "m-shp":   sel(r(-7,-7,14,8,P,2)+r(-7,2,14,8,P,3)+path("M-8 -5L-17 -11M8 -5L17 -11")+grip(-17,-11)+grip(17,-11)),
-   "m-row":   stack+l(-13,-5,13,-5)+grip(-13,-5)+grip(13,-5)+r(-3,-6,6,26,B,1.5)+r(-7,0,14,4,P,2)+r(-6,8,12,10,P,3),
-   "m-legp":  stack+r(-12,-7,24,6,M,1.5)+r(-3,-1,6,22,B,1.5)+r(-7,3,14,7,P,3)+r(-7,11,14,9,P,3),
-   "m-scurl": sel(r(-7,-7,14,4,P,2)+r(-7,-2,14,9,P,3)+l(0,7,0,11,M,2)+r(-12,11,24,5,M,2.5)),
-   "m-pcurl": stack+r(-3,-8,6,24,B,1.5)+r(-6,-6,12,20,P,3)+l(0,14,0,16,M,2)+r(-12,16,24,4,M,2),
-   "m-bic":   sel(r(-15,-5,30,8,P,3)+r(-5,5,10,8,P,3)+grip(-15,-9)+grip(15,-9)+l(-15,-9,-11,-9)+l(15,-9,11,-9)),
-   "m-tri":   sel(r(-9,-5,18,6,P,3)+r(-6,3,12,9,P,3)+l(-15,-11,-15,1)+l(15,-11,15,1)+grip(-15,-11)+grip(15,-11)),
-   "m-tpress":sel(r(-6,-7,12,5,P,2)+r(-6,-1,12,8,P,3)+r(-16,-3,4,13,M,2)+r(12,-3,4,13,M,2)),
-   "m-abd":   sel(r(-8,-5,16,6,P,3)+r(-7,3,14,9,P,3)+'<circle cx="-11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/><circle cx="11" cy="-9" r="4" fill="none" stroke="'+M+'" stroke-width="2.5"/>'),
-   "m-ext":   sel(r(-6,-7,12,9,P,3)+r(-6,3,12,8,P,3)+r(-8,13,16,5,M,2.5)),
-   "m-glute": stack+r(-3,-8,6,24,B,1.5)+r(-6,-7,12,6,P,3)+l(-14,2,14,2,M,2)+l(-14,9,14,9,M,2)+l(-14,2,-14,9,M,2)+l(14,2,14,9,M,2),
-   "m-had":   sel(r(-7,-5,14,6,P,3)+r(-7,3,14,9,P,3)+r(-15,-3,5,11,M,2)+r(10,-3,5,11,M,2)),
-   "m-torso": sel(r(-8,-6,16,7,P,3)+r(-7,3,14,9,P,3)+path("M-12 -7Q0 -14 12 -7")),
-   "m-calf":  r(-12,-16,24,32,B,4)+r(-9,-9,18,5,P,2)+r(-8,0,16,10,P,3)+l(-17,-4,17,-4)+plate(-18,-4)+plate(18,-4),
-   /* plate-loaded Hammer Strength, iso-lateral: two independent arms, a plate on each horn at the back */
-   "m-hsbench": r(-12,-16,24,32,B,4)+r(-8,-7,16,5,P,2)+r(-8,0,16,12,P,3)+path("M-10 -4H-17V9M10 -4H17V9")+grip(-17,10)+grip(17,10)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12),
-   "m-hsuper": r(-12,-16,24,32,B,4)+r(-6,-9,12,12,P,3)+r(-6,5,12,8,P,3)+path("M-8 -6H-17V4M8 -6H17V4")+grip(-17,5)+grip(17,5)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12),
-   "m-hswpull": r(-12,-16,24,32,B,4)+r(-11,-7,5,7,P,2)+r(6,-7,5,7,P,2)+r(-6,1,12,11,P,3)+path("M-9 -11L-17 -11V0M9 -11L17 -11V0")+grip(-17,1)+grip(17,1)+l(-17,-14,17,-14)+plate(-18,-14)+plate(18,-14),
-   "m-hsrow": r(-12,-16,24,32,B,4)+r(-6,-6,12,7,P,2)+r(-7,3,14,10,P,3)+path("M-8 -2H-16V9M8 -2H16V9")+grip(-16,10)+grip(16,10)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12)
+   mach:  sel(back(-5)+seat(3)),
+   "m-chest": sel(back(-5)+seat(3)+path("M-9 -2H-12.5V13M9 -2H12.5V13")),
+   "m-fly":   sel(r(-6,-5,12,6,P,2.5)+r(-6,3,12,10,P,4)+path("M-7 -4Q-13 -3 -12.5 13M7 -4Q13 -3 12.5 13")),
+   "m-shp":   sel(r(-8,-5,16,19,P,4)+both(s=>l(s*9,-3,s*12.5,5))),
+   "m-row":   stack+l(-12.5,-3,12.5,-3)+r(-5,-3,10,19,B,3)+r(-7,2,14,4,P,2)+seat(8,9),
+   "m-legp":  sel(r(-13,-6,26,7,P,2)+r(-8,4,16,13,P,4)),
+   "m-scurl": sel(back(-5,5)+r(-8,1,16,7,P,3)+roller(4,26)+roller(12,26)),
+   "m-pcurl": sel(r(-7,-5,14,16,P,3.5)+roller(12,26)),
+   "m-bic":   sel(r(-13,-2,26,7,P,3)+r(-6,7,12,10,P,4)+both(s=>l(s*12.5,-6.5,s*8,-6.5))),
+   "m-tri":   sel(r(-10,-2,20,6,P,3)+r(-6,6,12,11,P,4)+both(s=>l(s*12.5,-4,s*12.5,6))),
+   "m-tpress":sel(back(-5)+r(-6,3,12,12,P,4)+both(s=>l(s*11.5,2,s*11.5,15))),
+   "m-abd":   sel(seat(5,10)+r(-11,-4,22,6,P,3)+both(s=>l(s*5,-7,s*5,-5))),
+   "m-ext":   sel(back(-5)+seat(3,8)+roller(12,26)),
+   "m-glute": sel(r(-11,-4,22,6,P,3)+r(1,8,10,9,P,2)+both(s=>l(s*12.5,-6,s*12.5,-1))),
+   "m-had":   sel(r(-7,-5,14,13,P,4)+both(s=>l(s*6,7,s*11,14.5,P,5))),
+   "m-torso": sel(c(0,8,8.5,P)+path("M-11 -1Q0 -9 11 -1")),
+   "m-calf":  frame+horns(20,-3)+r(-11,-9,22,6,P,3)+seat(3),
+   /* iso-lateral: two independent arms */
+   "m-hsbench": frame+horns(20,-10)+back(-5)+seat(3)+path("M-10 -2H-15V13M10 -2H15V13"),
+   "m-hsuper": frame+horns(20,-10)+r(-7,-7,14,14,P,3.5)+r(-7,9,14,6,P,3)+path("M-9 -4L-15 -1V7M9 -4L15 -1V7"),
+   "m-hswpull": frame+horns(20,-11)+both(s=>r(s<0?-11:5,-3,6,7,P,2.5))+r(-7,6,14,9,P,4)+both(s=>l(s*8,-12,s*15,-2)),
+   "m-hsrow": frame+horns(20,-10)+r(-8,-1,16,5,P,2.5)+seat(6,9)+both(s=>l(s*15,-4,s*15,8))
   };
 })();
 const mapMachines = () => S.map || GYM_MAP.machines;
