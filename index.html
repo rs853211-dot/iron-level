@@ -577,7 +577,7 @@ const draft = {
    The key is the publishable one and is meant to be public; Row Level Security in the database keeps every user's rows apart.
    Sync = pull rows changed since the last pull, merge (a local edit newer than the server row wins, else the server wins;
    a deleted workout is a tombstone row), push what changed here. Merging is the pure function cloudMerge(), covered by tests/cloud.test.js. */
-const CLOUD={url:"",key:""};
+const CLOUD={url:"https://zyynmcskzctgzqufeyhd.supabase.co",key:"sb_publishable_Obh_lO1htDzdFKW_E2VfvQ_bRNK6VRl"};
 const cloudOn=()=>!!(CLOUD.url&&CLOUD.key);
 const CLOUD_LS=LS+".cloud";
 function cloudMerge(local,meta,remote){
