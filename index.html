@@ -643,7 +643,7 @@ const cloud={
     try{r=await fetch(CLOUD.url+"/auth/v1/"+path,{method:"POST",headers:{apikey:CLOUD.key,"Content-Type":"application/json"},body:JSON.stringify(body)})}
     catch(e){throw cerr("Нет сети. Попробуй ещё раз, когда появится интернет",0)}
     try{j=await r.json()}catch(e){}
-    if(!r.ok) throw cerr((j&&(j.msg||j.error_description||j.message))||"Ошибка входа ("+r.status+")",r.status);
+    if(!r.ok) throw cerr(r.status===429?"Слишком много попыток. Подожди минуту и попробуй снова":r.status>=500?"Сервер не смог отправить письмо. Попробуй позже ("+r.status+")":(j&&(j.msg||j.error_description||j.message))||"Ошибка входа ("+r.status+")",r.status);
     return j;
   },
   setAuth(j){
@@ -2270,20 +2270,22 @@ document.addEventListener("click",async ev=>{
     case "demo": S.demo=true; S.workouts=makeDemo(); S.tab="home"; render(); window.scrollTo(0,0); break;
     case "demo-clear": S.demo=false; S.workouts=[]; S.coach=null; render(); break;
     case "cloud-send":{
+      keepOnb();
       const email=($("#cl-email").value||"").trim().toLowerCase();
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast("Введи почту целиком, например name@mail.com");$("#cl-email").focus();return}
       cloud.err=""; S.cloud={step:"email",email};
-      try{await cloud.sendCode(email); S.cloud={step:"code",email}; toast("Код отправлен на "+email)}catch(e){cloud.err=e.message}
+      try{await cloud.sendCode(email); S.cloud={step:"code",email}; toast("Код отправлен на "+email)}catch(e){cloud.err=e.message; toast(e.message)}
       render(); break}
     case "cloud-verify":{
+      keepOnb();
       const code=($("#cl-code").value||"").replace(/\D/g,""), email=(S.cloud||{}).email;
       if(code.length<6){toast("Введи код из письма: 6 цифр или больше");$("#cl-code").focus();return}
       cloud.err="";
       try{await cloud.verify(email,code); S.cloud=null; toast("Вход выполнен"); await cloud.sync()}catch(e){cloud.err=e.message; toast(e.message)}
       render(); break}
-    case "cloud-back": S.cloud={step:"email",email:(S.cloud||{}).email}; render(); break;
+    case "cloud-back": keepOnb(); S.cloud={step:"email",email:(S.cloud||{}).email}; render(); break;
     case "cloud-sync": cloud.sync(); break;
-    case "cloud-out": cloud.signOut(); S.cloud=null; render(); toast("Вышел. Данные на телефоне остались"); break;
+    case "cloud-out": keepOnb(); cloud.signOut(); S.cloud=null; render(); toast("Вышел. Данные на телефоне остались"); break;
     case "exp": downloadBackup(); render(); break;
     case "imp-open": S.pendingImport=null; render(); $("#imp-file").click(); break;
     case "imp-yes": if(S.pendingImport) await applyImport(S.pendingImport); break;
@@ -2367,6 +2369,8 @@ document.addEventListener("change",async ev=>{
 document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&S.sheet){S.sheet=null;render()}
   if(ev.key==="Enter"&&(ev.target.id==="m-rot"||ev.target.id==="m-size")){ev.preventDefault();ev.target.blur()}
   if((ev.key==="Enter"||ev.key===" ")&&ev.target.dataset&&ev.target.dataset.spot){ev.preventDefault();ev.target.dispatchEvent(new MouseEvent("click",{bubbles:true}))} });
+/* the sign-in card re-renders the page: keep what was typed on the create-character screen */
+function keepOnb(){if(!S.profile) S.onb=readOnb()}
 function readOnb(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};return Object.assign({},S.onb||{},{name:g("o-name"),bw:g("o-bw"),height:g("o-h"),age:g("o-age")})}
 function readProfileInputs(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};
   const bw=parseFloat(String(g("p-bw")).replace(",","."));
