@@ -19,9 +19,16 @@ Ohne diese Schritte bleibt die Cloud-Synchronisation aus: In `index.html` stehen
 Die App meldet per **Code aus der E-Mail** an, nicht per Link (ein Link würde in Safari statt in der Home-Bildschirm-App öffnen).
 
 1. «Authentication» → «Sign In / Providers»: «Email» ist aktiv, «Confirm email» kann an bleiben.
-2. «Authentication» → «Email Templates» → «Magic Link»: Den Text so ändern, dass er den Code enthält, zum Beispiel:
-   `Dein Code für Iron Level: {{ .Token }}`
-   (Auch das Template «Confirm signup» gleich ändern, denn der erste Login läuft darüber.)
+2. «Authentication» → «Email Templates» → «Magic Link»: Betreff und Text so ändern, dass die Mail den Code enthält. Die App gibt es auf Russisch, Deutsch und Englisch, die Mail ist deshalb für alle auf Englisch:
+   - Subject: `Your Iron Level sign-in code`
+   - Body:
+     ```html
+     <h2>Iron Level</h2>
+     <p>Your sign-in code:</p>
+     <p style="font-size:28px;letter-spacing:4px;font-weight:600">{{ .Token }}</p>
+     <p>The code is valid for a short time and works only once. If you did not ask to sign in, just ignore this e-mail.</p>
+     ```
+   Das Template «Confirm sign up» genauso ändern (gleicher Betreff, gleicher Text), denn der erste Login läuft darüber. (Im Projekt am 2026-11-11 so eingetragen.)
 3. «Authentication» → «URL Configuration»: Als «Site URL» `https://rs853211-dot.github.io/iron-level/` eintragen.
 4. Hinweis zum Versand: Der eingebaute Mailversand von Supabase ist stark begrenzt (wenige Mails pro Stunde) und liefert nur an Adressen im Projektteam. Für dich als Besitzer reicht das. Für Gym-Kunden (Version 2.0) braucht es einen eigenen SMTP-Dienst, zum Beispiel Resend (kostenloser Plan vorhanden).
 
@@ -33,7 +40,7 @@ Die App meldet per **Code aus der E-Mail** an, nicht per Link (ein Link würde i
 
 ## 5. Prüfen
 
-1. App öffnen → Profil → «Облако» → E-Mail eingeben → «Получить код» → Code eintippen → «Войти».
+1. App öffnen → Profil → «Cloud» → E-Mail eingeben → «Code anfordern» → Code eintippen → «Anmelden» (auf Russisch: «Облако» → «Получить код» → «Войти»).
 2. Eine Trainingseinheit speichern. In Supabase unter «Table Editor» → `workouts` erscheint nach wenigen Sekunden eine Zeile.
 3. Auf einem zweiten Gerät (oder im Browser) anmelden: Die Daten erscheinen dort.
 4. Eine Einheit auf Gerät A löschen: Sie verschwindet auf Gerät B nach der nächsten Synchronisation.
