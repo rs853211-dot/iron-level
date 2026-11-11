@@ -530,15 +530,15 @@ const store = {
   },
   async saveProfile(p){
     if(this.mode==="db"){try{await this.profRef().set({profile:p});return}catch(e){toast("Профиль не сохранился. Проверь сеть и сохрани ещё раз")}}
-    this.local();
+    if(this.local()) cloud.touchP();
   },
   async saveWorkout(w){
     if(this.mode==="db"){try{await this.wCol().doc(w.id).set(w);return}catch(e){toast(e&&e.code==="quota_exceeded"?"Хранилище заполнено: удали старые тренировки":"Тренировка не сохранилась. Проверь сеть")}}
-    this.local();
+    if(this.local()) cloud.touchW(w.id);
   },
   async delWorkout(id){
     if(this.mode==="db"){try{await this.wCol().doc(id).delete();return}catch(e){toast("Не удалось удалить. Попробуй ещё раз")}}
-    this.local();
+    if(this.local()) cloud.touchDel(id);
   },
   /* import: unlike local(), a failed write is reported, so the user knows the backup did not land */
   async replaceAll(profile,workouts){
@@ -552,8 +552,14 @@ const store = {
         return true;
       }catch(e){toast("Не получилось загрузить в хранилище. Проверь сеть");return false}
     }
-    try{localStorage.setItem(LS,JSON.stringify({profile,workouts}));return true}
+    const gone=S.workouts.map(w=>w.id).filter(id=>!workouts.some(w=>w.id===id));
+    try{localStorage.setItem(LS,JSON.stringify({profile,workouts}))}
     catch(e){toast("В браузере не хватило места для этих данных");return false}
+    /* restoring a file replaces everything: all of it goes up, what is no longer there is deleted in the cloud */
+    for(const w of workouts) cloud.touchW(w.id);
+    for(const id of gone) cloud.touchDel(id);
+    cloud.touchP();
+    return true;
   }
 };
 const introSeen = {
@@ -563,6 +569,155 @@ const introSeen = {
 const draft = {
   get(){try{const r=localStorage.getItem(LS+".draft");return r?JSON.parse(r):null}catch(e){return null}},
   set(v){try{v?localStorage.setItem(LS+".draft",JSON.stringify(v)):localStorage.removeItem(LS+".draft")}catch(e){}}
+};
+
+/* ---------- cloud: optional sync with Supabase, plain fetch and no library ----------
+   The app keeps working from localStorage (offline in the gym); the cloud is a second copy that follows it.
+   Empty CLOUD.url / CLOUD.key = the feature is off and nothing here runs. Setup: docs/supabase-setup.md, tables: supabase/schema.sql.
+   The key is the publishable one and is meant to be public; Row Level Security in the database keeps every user's rows apart.
+   Sync = pull rows changed since the last pull, merge (a local edit newer than the server row wins, else the server wins;
+   a deleted workout is a tombstone row), push what changed here. Merging is the pure function cloudMerge(), covered by tests/cloud.test.js. */
+const CLOUD={url:"",key:""};
+const cloudOn=()=>!!(CLOUD.url&&CLOUD.key);
+const CLOUD_LS=LS+".cloud";
+function cloudMerge(local,meta,remote){
+  const m={since:meta.since||null,dw:{...meta.dw},del:{...meta.del},dp:meta.dp||0};
+  const ms=t=>Date.parse(t)||0, newer=(a,b)=>!a||ms(b)>ms(a);
+  let profile=local.profile, pushP=false;
+  const rp=remote.profile;
+  if(rp){
+    if(profile&&m.dp>ms(rp.updated_at)) pushP=true;                 /* my profile edit is newer */
+    else{
+      const r=parseBackup(JSON.stringify({app:"iron-level",version:BACKUP_V,profile:rp.data,workouts:[]}));
+      if(r.ok){profile=r.profile; m.dp=0} else if(profile) pushP=true; /* unreadable server copy: never lose the local one */
+    }
+  }else if(profile) pushP=true;
+  const byId=new Map(local.workouts.map(w=>[w.id,w])), seen=new Set(), incoming=[];
+  for(const r of remote.workouts){
+    seen.add(r.id);
+    if(newer(m.since,r.updated_at)) m.since=r.updated_at;
+    const mine=m.dw[r.id]||m.del[r.id]||0;
+    if(mine&&mine>ms(r.updated_at)) continue;                       /* my edit is newer: it stays and goes up */
+    delete m.dw[r.id]; delete m.del[r.id];
+    if(r.deleted) byId.delete(r.id); else if(r.data&&typeof r.data==="object") incoming.push(r);
+  }
+  if(incoming.length){
+    /* what comes from the server is untrusted like a backup file: same checks, ids forced to the row id */
+    const res=parseBackup(JSON.stringify({app:"iron-level",version:BACKUP_V,profile:profile||{name:"x",bw:70},workouts:incoming.map(r=>({...r.data,id:r.id}))}));
+    if(res.ok) for(const w of res.workouts) byId.set(w.id,w);
+  }
+  /* first sync on this device: everything only found here goes up */
+  if(!meta.since) for(const w of local.workouts) if(!seen.has(w.id)&&!m.dw[w.id]&&!m.del[w.id]) m.dw[w.id]=1;
+  for(const id of Object.keys(m.dw)) if(!byId.has(id)) delete m.dw[id];
+  return {profile,workouts:[...byId.values()],meta:m,pushP,up:Object.keys(m.dw),del:Object.keys(m.del)};
+}
+const cerr=(message,status)=>Object.assign(new Error(message),{status});
+const cloud={
+  st:{auth:null,since:null,dw:{},del:{},dp:0,last:0}, busy:false, again:false, err:"", timer:0,
+  load(){
+    try{
+      const o=JSON.parse(localStorage.getItem(CLOUD_LS)||"null"); if(!isO(o)) return;
+      const a=o.auth; if(isO(a)&&typeof a.refresh==="string"&&typeof a.access==="string"&&typeof a.uid==="string") this.st.auth={access:a.access,refresh:a.refresh,exp:+a.exp||0,uid:a.uid,email:String(a.email||"")};
+      if(typeof o.since==="string") this.st.since=o.since;
+      for(const k of ["dw","del"]) if(isO(o[k])) for(const [id,t] of Object.entries(o[k])) if(typeof t==="number") this.st[k][id]=t;
+      this.st.dp=+o.dp||0; this.st.last=+o.last||0;
+    }catch(e){}
+  },
+  save(){try{localStorage.setItem(CLOUD_LS,JSON.stringify(this.st))}catch(e){}},
+  signedIn(){return cloudOn()&&!!this.st.auth},
+  /* the store calls these after every local write; a short pause lets a burst of edits go up as one */
+  touchW(id){if(!this.signedIn()) return; this.st.dw[id]=Date.now(); delete this.st.del[id]; this.later()},
+  touchDel(id){if(!this.signedIn()) return; this.st.del[id]=Date.now(); delete this.st.dw[id]; this.later()},
+  touchP(){if(!this.signedIn()) return; this.st.dp=Date.now(); this.later()},
+  later(){this.save(); clearTimeout(this.timer); this.timer=setTimeout(()=>this.sync(),2000)},
+  status(){
+    if(this.busy) return "Синхронизация…";
+    if(this.err) return this.err;
+    const n=Object.keys(this.st.dw).length+Object.keys(this.st.del).length+(this.st.dp?1:0);
+    if(n) return "Ждёт отправки: "+n;
+    return this.st.last?"Синхронизировано в "+new Date(this.st.last).toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"}):"Ещё не синхронизировалось";
+  },
+  paint(){const el=document.getElementById("cloud-status"); if(el) el.textContent=this.status()},
+  async authCall(path,body){
+    let r,j=null;
+    try{r=await fetch(CLOUD.url+"/auth/v1/"+path,{method:"POST",headers:{apikey:CLOUD.key,"Content-Type":"application/json"},body:JSON.stringify(body)})}
+    catch(e){throw cerr("Нет сети. Попробуй ещё раз, когда появится интернет",0)}
+    try{j=await r.json()}catch(e){}
+    if(!r.ok) throw cerr((j&&(j.msg||j.error_description||j.message))||"Ошибка входа ("+r.status+")",r.status);
+    return j;
+  },
+  setAuth(j){
+    if(!j||!j.access_token||!j.refresh_token||!j.user||!j.user.id) throw cerr("Сервер вернул неполный ответ",500);
+    this.st.auth={access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(+j.expires_in||3600)*1000,uid:j.user.id,email:j.user.email||""};
+    this.save();
+  },
+  async sendCode(email){await this.authCall("otp",{email,create_user:true})},
+  async verify(email,code){this.setAuth(await this.authCall("verify",{type:"email",email,token:code}))},
+  async token(force){
+    const a=this.st.auth; if(!a) throw cerr("Не выполнен вход",401);
+    if(!force&&a.exp-Date.now()>60000) return a.access;
+    try{this.setAuth(await this.authCall("token?grant_type=refresh_token",{refresh_token:a.refresh}))}
+    catch(e){if(e.status===400||e.status===401||e.status===403){this.st.auth=null;this.save();throw cerr("Сессия истекла. Войди снова",401)} throw e}
+    return this.st.auth.access;
+  },
+  async api(method,path,body,prefer){
+    for(let retry=0;;retry++){
+      const tok=await this.token(retry>0);
+      let r;
+      try{r=await fetch(CLOUD.url+"/rest/v1/"+path,{method,headers:{apikey:CLOUD.key,Authorization:"Bearer "+tok,"Content-Type":"application/json",...(prefer?{Prefer:prefer}:{})},body:body?JSON.stringify(body):undefined})}
+      catch(e){throw cerr("Нет сети",0)}
+      if(r.status===401&&retry===0) continue;
+      if(!r.ok){let t="";try{t=(await r.json()).message||""}catch(e){} throw cerr(t||"Ошибка сервера ("+r.status+")",r.status)}
+      return method==="GET"?r.json():null;
+    }
+  },
+  async pull(){
+    const rows=new Map(); let from=this.st.since;
+    for(let i=0;i<50;i++){
+      const page=await this.api("GET","workouts?select=id,data,deleted,updated_at&order=updated_at.asc&limit=1000"+(from?"&updated_at=gte."+encodeURIComponent(from):""));
+      for(const r of page) rows.set(r.id,r);
+      if(page.length<1000) break;
+      from=page[page.length-1].updated_at;
+    }
+    const p=await this.api("GET","profiles?select=data,updated_at&limit=1");
+    return {workouts:[...rows.values()],profile:p[0]||null};
+  },
+  async once(){
+    const st=this.st, uid=st.auth.uid, before=JSON.stringify([S.profile,S.workouts]);
+    const res=cloudMerge({profile:S.profile,workouts:S.workouts},st,await this.pull());
+    S.profile=res.profile; S.workouts=res.workouts;
+    st.since=res.meta.since; st.dw=res.meta.dw; st.del=res.meta.del; st.dp=res.meta.dp; this.save();
+    if(S.profile) store.local();
+    const changed=JSON.stringify([S.profile,S.workouts])!==before;
+    /* push; marks are cleared only if the item was not edited again while the request was running */
+    const sentW={...st.dw}, sentD={...st.del}, sentP=st.dp, byId=new Map(S.workouts.map(w=>[w.id,w]));
+    const rows=[...res.up.filter(id=>byId.has(id)).map(id=>({user_id:uid,id,data:byId.get(id),deleted:false})),
+                ...res.del.map(id=>({user_id:uid,id,data:{},deleted:true}))];
+    for(let i=0;i<rows.length;i+=200) await this.api("POST","workouts?on_conflict=user_id,id",rows.slice(i,i+200),"resolution=merge-duplicates,return=minimal");
+    if(res.pushP&&S.profile) await this.api("POST","profiles?on_conflict=user_id",[{user_id:uid,data:S.profile}],"resolution=merge-duplicates,return=minimal");
+    for(const [id,t] of Object.entries(sentW)) if(st.dw[id]===t) delete st.dw[id];
+    for(const [id,t] of Object.entries(sentD)) if(st.del[id]===t) delete st.del[id];
+    if(res.pushP&&st.dp===sentP) st.dp=0;
+    this.save();
+    return changed;
+  },
+  async sync(){
+    if(!this.signedIn()) return;
+    if(this.busy){this.again=true;return}
+    this.busy=true; this.err=""; this.paint();
+    let changed=false;
+    try{do{this.again=false; changed=(await this.once())||changed}while(this.again); this.st.last=Date.now(); this.save()}
+    catch(e){this.err=e&&e.message?e.message:"Не удалось синхронизировать"}
+    this.busy=false;
+    /* a workout in progress is left alone; the pulled data shows at the next screen change */
+    if(changed&&!S.active&&S.profile) render(); else this.paint();
+  },
+  signOut(){
+    const a=this.st.auth;
+    if(a) fetch(CLOUD.url+"/auth/v1/logout",{method:"POST",headers:{apikey:CLOUD.key,Authorization:"Bearer "+a.access}}).catch(()=>{});
+    /* local data stays; the next login merges from scratch */
+    this.st={auth:null,since:null,dw:{},del:{},dp:0,last:0}; this.err=""; this.save();
+  }
 };
 
 /* ---------- backup: profile + log as one JSON file; everything derived is recomputed on load ---------- */
@@ -950,6 +1105,7 @@ function viewOnboard(){
     <p id="o-err" role="alert" style="color:var(--negative);font-size:13px"></p>
     <button class="btn primary block" data-act="onb-save">Создать персонажа</button>
     <button class="btn ghost block" data-act="imp-open">Восстановить из файла</button>${IMP_INPUT}
+    ${viewCloud()}
     <p class="meta">${store.mode==="db"?"Записи хранятся в твоём личном разделе: их видишь только ты, на любом устройстве.":"Записи хранятся в этом браузере."}</p>
   </div>`;
 }
@@ -1912,6 +2068,21 @@ function barChart(weeks,vals){
   </svg>`;
 }
 
+/* sign-in is a code from an e-mail, not a link: a link would open in Safari instead of the Home Screen app */
+function viewCloud(){
+  if(!cloudOn()) return "";
+  const c=S.cloud||{step:"email"}, a=cloud.st.auth;
+  if(cloud.signedIn()) return `<div class="card"><h2>Облако</h2>
+    <p class="sub" style="font-size:13px">Тренировки и профиль копируются на сервер и подтягиваются на других устройствах. Вход: ${esc(a.email)}.</p>
+    <p class="meta" id="cloud-status" role="status">${esc(cloud.status())}</p>
+    <div class="row"><button class="btn" data-act="cloud-sync">Синхронизировать</button><button class="btn ghost" data-act="cloud-out">Выйти</button></div></div>`;
+  return `<div class="card"><h2>Облако</h2>
+    <p class="sub" style="font-size:13px">Войди по почте, и данные не потеряются при смене телефона. Пароль не нужен: придёт код.${cloud.err?" "+esc(cloud.err):""}</p>
+    ${c.step==="code"?`<div class="field"><label for="cl-code">Код из письма на ${esc(c.email)}</label><input id="cl-code" name="one-time-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" spellcheck="false"></div>
+      <div class="row"><button class="btn primary" data-act="cloud-verify">Войти</button><button class="btn ghost" data-act="cloud-back">Другая почта</button></div>`
+    :`<div class="field"><label for="cl-email">Почта</label><input id="cl-email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="${esc(c.email||"")}"></div>
+      <div class="row"><button class="btn primary" data-act="cloud-send">Получить код</button></div>`}</div>`;
+}
 function viewProfile(){
   const p=S.profile, d=D; const on=Object.keys(d.unlocked).length;
   const sorted=[...ACH].sort((a,b)=>{const ua=d.unlocked[a.id]?1:0, ub=d.unlocked[b.id]?1:0; if(ua!==ub) return ua-ub; const [ha,na]=a.p(d.cum),[hb,nb]=b.p(d.cum); return hb/nb-ha/na});
@@ -1940,6 +2111,7 @@ function viewProfile(){
     <div class="card"><h2>Как считается</h2>
       <p class="sub" style="font-size:13px">Рекорд: лучший расчётный максимум на 1 раз в упражнении по формуле Эпли, вес × (1 + повторы ÷ 30). Сила группы: твой лучший результат относительно веса тела, где 100 = уверенный продвинутый уровень. Серия: недели подряд, в которых было 2 или больше тренировок. Опыт пересчитывается из записей, поэтому после удаления тренировки он тоже уменьшится.</p>
       <button class="btn" data-act="intro-open" style="align-self:flex-start">Как пользоваться</button></div>
+    ${viewCloud()}
     <div class="card"><h2>Данные</h2>
       <p class="sub" style="font-size:13px">${store.mode==="db"?"Записи хранятся в твоём личном разделе этой страницы: видишь только ты, на любом устройстве под своим аккаунтом.":"Записи хранятся только в этом браузере. Если очистить данные Safari, они пропадут. Сохраняй копию в файл время от времени."}</p>
       <div class="row"><button class="btn" data-act="exp">Сохранить в файл</button><button class="btn" data-act="imp-open">Загрузить из файла</button></div>
@@ -2097,6 +2269,21 @@ document.addEventListener("click",async ev=>{
       Object.assign(S.profile,v); await store.saveProfile(S.profile); render(); toast("Профиль сохранён"); break}
     case "demo": S.demo=true; S.workouts=makeDemo(); S.tab="home"; render(); window.scrollTo(0,0); break;
     case "demo-clear": S.demo=false; S.workouts=[]; S.coach=null; render(); break;
+    case "cloud-send":{
+      const email=($("#cl-email").value||"").trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast("Введи почту целиком, например name@mail.com");$("#cl-email").focus();return}
+      cloud.err=""; S.cloud={step:"email",email};
+      try{await cloud.sendCode(email); S.cloud={step:"code",email}; toast("Код отправлен на "+email)}catch(e){cloud.err=e.message}
+      render(); break}
+    case "cloud-verify":{
+      const code=($("#cl-code").value||"").replace(/\D/g,""), email=(S.cloud||{}).email;
+      if(code.length<6){toast("Введи код из письма: 6 цифр или больше");$("#cl-code").focus();return}
+      cloud.err="";
+      try{await cloud.verify(email,code); S.cloud=null; toast("Вход выполнен"); await cloud.sync()}catch(e){cloud.err=e.message; toast(e.message)}
+      render(); break}
+    case "cloud-back": S.cloud={step:"email",email:(S.cloud||{}).email}; render(); break;
+    case "cloud-sync": cloud.sync(); break;
+    case "cloud-out": cloud.signOut(); S.cloud=null; render(); toast("Вышел. Данные на телефоне остались"); break;
     case "exp": downloadBackup(); render(); break;
     case "imp-open": S.pendingImport=null; render(); $("#imp-file").click(); break;
     case "imp-yes": if(S.pendingImport) await applyImport(S.pendingImport); break;
@@ -2207,6 +2394,7 @@ window.ironLevelCore={cleanLoaded,GROUP_KEYS,XP,levelNeed,cleanSchedule,schedOf,
   /* derive() on given data, without touching the live state */
   derive:(profile,workouts)=>{const keep=[S.profile,S.workouts];S.profile=profile;S.workouts=workouts;rebuildEx();try{return derive()}finally{S.profile=keep[0];S.workouts=keep[1];rebuildEx()}}};
 window.ironLevelBackup={makeBackup,parseBackup};
+window.ironLevelCloud={cloudMerge};
 window.ironLevelMap={spots:GYM_MAP.machines.filter(canTap).map(m=>({id:m.id,ex:mEx(m)})),kinds:Object.keys(GM_KIND),icons:Object.keys(GM_ICON),add:GM_ADD,models:GYM_MODELS,kindEx:Object.fromEntries(Object.entries(GM_KIND).map(([k,v])=>[k,v.ex||[]])),parseMap,makeMapFile,machines:GYM_MAP.machines};
 window.ironLevelInsights={groupRank,recovery,muscleFill,loadW,catalog:EX.map(e=>({id:e.id,g:e.g,z:e.z}))};
 window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,cleanPrograms,progList,rebuildPrograms,MAX_PROGS,MAX_DAYS,MAX_SLOTS,EX_IDS:EX.map(e=>({id:e.id,g:e.g}))};
@@ -2228,7 +2416,12 @@ window.ironLevelPrograms={PROGRAMS,nextDay,buildDay,cleanPrograms,progList,rebui
   }
   if(S.profile&&!introSeen.get()) S.intro=0;
   S.map=mapStore.get();
+  cloud.load();
   render();
+  /* back from the background or the network: catch up (sync() does nothing when signed out) */
+  cloud.sync();
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible") cloud.sync()});
+  window.addEventListener("online",()=>cloud.sync());
   if(store.broken) toast("Данные в браузере повреждены. Копия сохранена. Загрузи резервную копию: «Восстановить из файла»");
   else if(store.blocked) toast("Браузер не даёт хранить данные. Приложение не сможет сохранять тренировки");
 })();
