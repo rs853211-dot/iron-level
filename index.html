@@ -895,7 +895,7 @@ const GROUP_KEYS = Object.keys(GROUPS);
 // t = e1RM ÷ bodyweight that counts as 100 (solid advanced level). bw: bodyweight lift (bodyweight + added). per: weight is per dumbbell
 // assist: machine with a counterweight, load = bodyweight − counterweight.
 // z: zone in the gym. hint: what to enter as weight. Old ids stay so saved workouts keep reading.
-// Checked against videos of Crunch Fit Lichtenberg (2026-10): Hammer Strength plate-loaded and racks, Life Fitness
+// Checked against videos of the owner's gym (2026-10): Hammer Strength plate-loaded and racks, Life Fitness
 // selectorized rows, a SYNRGY360 functional station, sled turf, Taurus assisted chin/dip, a decline bench.
 const ZONES = {hs:"Hammer Strength · рычажные",lf:"Life Fitness · блочные",cable:"Кроссовер и блоки",func:"Функциональная зона · SYNRGY360",free:"Свободные веса",bw:"Свой вес и станции",custom:"Мои тренажёры"};
 const ZONE_ORDER = ["hs","lf","cable","func","free","bw","custom"];
@@ -1357,7 +1357,7 @@ function parseBackup(text){
   const profile={
     name:p.name.trim().slice(0,24), sex:p.sex==="f"?"f":"m", bw:p.bw,
     height:toInt(p.height), age:toInt(p.age),
-    gym:str(p.gym)&&p.gym.trim()?p.gym.trim().slice(0,40):"Crunch Fit Lichtenberg",
+    gym:str(p.gym)&&p.gym.trim()?p.gym.trim().slice(0,40):"",
     hidden:Array.isArray(p.hidden)?p.hidden.filter(safeId):[],
     custom:Array.isArray(p.custom)?p.custom.filter(c=>isObj(c)&&safeId(c.id)&&!builtin.has(c.id)&&str(c.n)&&c.n.trim()&&Object.hasOwn(GROUPS,c.g)).map(c=>({id:c.id,n:c.n.trim().slice(0,40),g:c.g})):[],
     createdAt:isDate(p.createdAt)?p.createdAt:today(),
@@ -2010,7 +2010,7 @@ function viewSheet(){
     <button class="link" data-act="open-gym" style="align-self:flex-start">${T("Нет нужного тренажёра? Настроить мой зал")}</button>
   </div></div>`;
 }
-/* ---------- gym map: Crunch Fit Lichtenberg, 1st floor, traced from the escape plan and marked by the owner ----------
+/* ---------- gym map: the owner's gym, 1st floor, traced from the escape plan and marked by the owner ----------
    Coordinates are the map's own (viewBox 900×720). Every machine is its own object {id, k, x, y, r}: a top-down icon
    from GM_ICON of kind k, centred on x,y and turned r degrees; n and ex override the kind's name and exercises.
    The layout marked in the editor (Разметка) is kept in localStorage and replaces GYM_MAP.machines on this phone.
@@ -2524,7 +2524,7 @@ function viewMapSheet(){
       </div></div>
   </div></div>`;
 }
-function gymName(){return (S.profile&&S.profile.gym)||"Crunch Fit Lichtenberg"}
+function gymName(){return (S.profile&&S.profile.gym)||T("Мой зал")}
 /* ---------- program editor: any program, built-in or own, can be changed; a changed built-in has a way back ---------- */
 /* the editable copy lives in the profile; the first change of a built-in program copies it there */
 function pgEdit(){
@@ -2724,7 +2724,7 @@ function viewProfile(){
         <div class="field"><label for="p-h">${T("Рост, см")}</label><input id="p-h" name="height" inputmode="numeric" value="${esc(p.height||"")}" autocomplete="off"></div>
         <div class="field"><label for="p-age">${T("Возраст")}</label><input id="p-age" name="age" inputmode="numeric" value="${esc(p.age||"")}" autocomplete="off"></div>
       </div>
-      <div class="field"><label for="p-gym">${T("Зал")}</label><input id="p-gym" name="gym" maxlength="40" value="${esc(gymName())}" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><label for="p-gym">${T("Зал")}</label><input id="p-gym" name="gym" maxlength="40" value="${esc(S.profile.gym||"")}" placeholder="${esc(T("Мой зал"))}" autocomplete="off" spellcheck="false"></div>
       <div class="seg" role="group" aria-label="${T("Фигура персонажа")}">${[["m",T("Мужской")],["f",T("Женский")]].map(([k,n])=>`<button data-psex="${k}" aria-pressed="${p.sex===k}">${n}</button>`).join("")}</div>
       <button class="btn primary" data-act="p-save" style="align-self:flex-end">${T("Сохранить")}</button>
     </div>
@@ -2830,7 +2830,7 @@ document.addEventListener("click",async ev=>{
     case "onb-save":{const p=readOnb();const bw=parseFloat(String(p.bw).replace(",","."));
       if(!p.name||!p.name.trim()){showOnbErr(T("Введи имя персонажа."),"o-name");return}
       if(!(bw>25&&bw<300)){showOnbErr(T("Введи вес тела от 25 до 300 кг, например 78."),"o-bw");return}
-      S.profile={name:p.name.trim(),sex:p.sex||"m",bw,height:parseInt(p.height)||null,age:parseInt(p.age)||null,gym:"Crunch Fit Lichtenberg",hidden:[],custom:[],createdAt:today()};
+      S.profile={name:p.name.trim(),sex:p.sex||"m",bw,height:parseInt(p.height)||null,age:parseInt(p.age)||null,gym:"",hidden:[],custom:[],createdAt:today()};
       await store.saveProfile(S.profile); S.tab="home"; if(!introSeen.get()) S.intro=0; render(); break}
     case "start": if(S.demo){S.demo=false;S.workouts=[]} S.pday=null; S.active={id:uid(),date:today(),t:Date.now(),exercises:[]}; draft.set(S.active); S.tab="workout"; S.sheet={g:"all",q:""}; render(); break;
     case "start-prog":{const pl=planToday(); if(!pl||!pl.list.length) break;
@@ -3003,7 +3003,7 @@ function keepOnb(){if(!S.profile) S.onb=readOnb()}
 function readOnb(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};return Object.assign({},S.onb||{},{name:g("o-name"),bw:g("o-bw"),height:g("o-h"),age:g("o-age")})}
 function readProfileInputs(){const g=id=>{const el=document.getElementById(id);return el?el.value:""};
   const bw=parseFloat(String(g("p-bw")).replace(",","."));
-  return {name:g("p-name").trim(),bw:isNaN(bw)?S.profile.bw:bw,height:parseInt(g("p-h"))||null,age:parseInt(g("p-age"))||null,gym:g("p-gym").trim()||gymName()}}
+  return {name:g("p-name").trim(),bw:isNaN(bw)?S.profile.bw:bw,height:parseInt(g("p-h"))||null,age:parseInt(g("p-age"))||null,gym:g("p-gym").trim()}}
 function showOnbErr(msg,id){const e=$("#o-err");e.textContent=msg;const el=document.getElementById(id);if(el){el.setAttribute("aria-invalid","true");el.focus()}}
 document.addEventListener("input",ev=>{
   const el=ev.target;
