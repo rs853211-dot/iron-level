@@ -322,6 +322,8 @@ const TR={
  "тяга сидя":["","Rudern sitzend"],
  "жим ногами":["","Beinpresse"],
  "гакк-присед":["","Hackenschmidt-Kniebeuge"],
+ "V-присед":["","V-Kniebeuge"],
+ "ягодичный мост":["","Hip Thrust"],
  "икры сидя":["","Wadenheben sitzend"],
  "скручивания":["","Bauchpresse"],
  "бабочка и задняя дельта":["","Butterfly und hintere Schulter"],
@@ -911,6 +913,9 @@ const EX = [
  {id:"hs-row",n:"Iso-Lateral Row",ru:"тяга сидя",g:"back",t:1.3,z:"hs",plates:true},
  {id:"hs-legp",n:"Iso-Lateral Leg Press",ru:"жим ногами",g:"legs",t:3.5,z:"hs",plates:true},
  {id:"hs-hack",n:"Linear Hack Press",ru:"гакк-присед",g:"legs",t:2.5,z:"hs",plates:true},
+ {id:"hs-vsquat",n:"V-Squat",ru:"V-присед",g:"legs",t:2.5,z:"hs",plates:true},
+ {id:"hs-llegp",n:"Linear Leg Press",ru:"жим ногами",g:"legs",t:3.5,z:"hs",plates:true},
+ {id:"hs-gdrive",n:"Glute Drive",ru:"ягодичный мост",g:"legs",t:2,z:"hs",plates:true},
  {id:"hs-calf",n:"Seated Calf Raise",ru:"икры сидя",g:"legs",t:1.5,z:"hs",plates:true},
  {id:"hs-ab",n:"Abdominal/Oblique Crunch",ru:"скручивания",g:"core",t:1,z:"hs",plates:true},
  // Life Fitness Insignia selectorized
@@ -2061,7 +2066,10 @@ const GYM_MODELS = [
   {id:"hs-bench-m",n:"Hammer Strength Iso-Lateral Bench Press",k:"lever",icon:"m-hsbench",ex:["hs-bench"]},
   {id:"hs-super-m",n:"Hammer Strength Iso-Lateral Super Incline Press",k:"lever",icon:"m-hsuper",ex:["hs-super"]},
   {id:"hs-wpull-m",n:"Hammer Strength Iso-Lateral Wide Pulldown",k:"lever",icon:"m-hswpull",ex:["hs-wpull"]},
-  {id:"hs-row-m",n:"Hammer Strength Iso-Lateral Row",k:"lever",icon:"m-hsrow",ex:["hs-row"]}
+  {id:"hs-row-m",n:"Hammer Strength Iso-Lateral Row",k:"lever",icon:"m-hsrow",ex:["hs-row"]},
+  {id:"hs-vsquat-m",n:"Hammer Strength V-Squat",k:"hack",icon:"hack",ex:["hs-vsquat"]},
+  {id:"hs-llegp-m",n:"Hammer Strength Linear Leg Press",k:"legpress",icon:"legpress",ex:["hs-llegp"]},
+  {id:"hs-gdrive-m",n:"Hammer Strength Glute Drive",k:"lever",icon:"m-hsglute",ex:["hs-gdrive"]}
 ];
 const GMM = Object.fromEntries(GYM_MODELS.map(x=>[x.id,x]));
 const mModel = m => m.model?GMM[m.model]:null;
@@ -2220,7 +2228,8 @@ const GM_ICON = (()=>{
    "m-hsbench": r(-12,-16,24,32,B,4)+r(-8,-7,16,5,P,2)+r(-8,0,16,12,P,3)+path("M-10 -4H-17V9M10 -4H17V9")+grip(-17,10)+grip(17,10)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12),
    "m-hsuper": r(-12,-16,24,32,B,4)+r(-6,-9,12,12,P,3)+r(-6,5,12,8,P,3)+path("M-8 -6H-17V4M8 -6H17V4")+grip(-17,5)+grip(17,5)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12),
    "m-hswpull": r(-12,-16,24,32,B,4)+r(-11,-7,5,7,P,2)+r(6,-7,5,7,P,2)+r(-6,1,12,11,P,3)+path("M-9 -11L-17 -11V0M9 -11L17 -11V0")+grip(-17,1)+grip(17,1)+l(-17,-14,17,-14)+plate(-18,-14)+plate(18,-14),
-   "m-hsrow": r(-12,-16,24,32,B,4)+r(-6,-6,12,7,P,2)+r(-7,3,14,10,P,3)+path("M-8 -2H-16V9M8 -2H16V9")+grip(-16,10)+grip(16,10)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12)
+   "m-hsrow": r(-12,-16,24,32,B,4)+r(-6,-6,12,7,P,2)+r(-7,3,14,10,P,3)+path("M-8 -2H-16V9M8 -2H16V9")+grip(-16,10)+grip(16,10)+l(-17,-12,17,-12)+plate(-18,-12)+plate(18,-12),
+   "m-hsglute": r(-12,-17,24,34,B,4)+r(-8,-13,16,6,P,2)+r(-8,-4,16,8,P,3)+l(-11,0,11,0)+r(-6,9,12,5,M,2)+l(-17,12,17,12)+plate(-18,12)+plate(18,12)
   };
 })();
 const mapMachines = () => S.map || GYM_MAP.machines;
